@@ -25,7 +25,7 @@ const Wordmark = () => {
       href="#top"
     >
       <span className="grid size-6 place-items-center border border-ink bg-ink text-paper transition-colors group-hover:bg-cobalt">
-        P
+        O
       </span>
       Outcomes
     </a>
