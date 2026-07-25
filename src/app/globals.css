@@ -27,15 +27,6 @@ body {
   color: #ffffff;
 }
 
-@keyframes draw-line {
-  from {
-    stroke-dashoffset: 90;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
 @keyframes float-paper {
   0%,
   100% {
@@ -57,11 +48,6 @@ body {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .draw-line {
-    animation: draw-line 1.8s ease-out both;
-    stroke-dasharray: 90;
-  }
-
   .float-paper {
     animation: float-paper 6s ease-in-out infinite;
   }
