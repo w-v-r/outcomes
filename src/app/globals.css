@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-paper: #f7f7f3;
+  --color-ink: #111210;
+  --color-ledger: #e7e8e2;
+  --color-muted: #6d7069;
+  --color-cobalt: #3146ff;
+  --color-cobalt-light: #e8ebff;
+  --color-coral: #ff7657;
+  --font-sans: var(--font-instrument-sans);
+  --font-serif: var(--font-newsreader);
+  --font-mono: var(--font-ibm-plex-mono);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #f7f7f3;
+  color: #111210;
+}
+
+::selection {
+  background: #3146ff;
+  color: #ffffff;
+}
+
+@keyframes draw-line {
+  from {
+    stroke-dashoffset: 90;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes float-paper {
+  0%,
+  100% {
+    transform: rotate(-1deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-0.35deg) translateY(-4px);
+  }
+}
+
+@keyframes pulse-proof {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(49, 70, 255, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(49, 70, 255, 0.1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .draw-line {
+    animation: draw-line 1.8s ease-out both;
+    stroke-dasharray: 90;
+  }
+
+  .float-paper {
+    animation: float-paper 6s ease-in-out infinite;
+  }
+
+  .pulse-proof {
+    animation: pulse-proof 2.8s ease-in-out infinite;
+  }
+}
