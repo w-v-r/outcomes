@@ -62,16 +62,14 @@ const Header = () => {
             Economics
           </a>
           <a
-            className="text-sm text-muted transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
+            className="inline-flex items-center gap-3 border border-ink bg-ink px-6 py-2.5 text-xs font-semibold text-paper transition-colors hover:border-cobalt hover:bg-cobalt focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
             href="/sign-in"
           >
-            Sign in
-          </a>
-          <a
-            className="inline-flex items-center gap-2 border border-ink bg-ink px-4 py-2.5 text-xs font-medium text-paper transition-colors hover:border-cobalt hover:bg-cobalt focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
-            href="#early-access"
-          >
-            Request access
+            <span className="inline-flex items-center gap-2.5">
+              <span>Sign up</span>
+              <span aria-hidden="true">/</span>
+              <span>Sign in</span>
+            </span>
             <ArrowUpRight />
           </a>
         </nav>
@@ -435,9 +433,9 @@ const FinalCta = () => {
           </p>
           <a
             className="mt-10 inline-flex items-center gap-3 border border-white bg-white px-6 py-4 text-sm font-medium text-cobalt transition-colors hover:bg-transparent hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
-            href="mailto:?subject=Outcomes%20early%20access&body=I%27d%20like%20to%20request%20early%20access%20to%20Outcomes."
+            href="/sign-in"
           >
-            Request early access
+            Sign up / Sign in
             <ArrowUpRight />
           </a>
         </div>
