@@ -74,7 +74,7 @@ const handler = createMcpHandler(
       "quote_task",
       {
         description:
-          "Create an immutable fixed-price quote for an allowlisted coding outcome.",
+          "Create an immutable fixed-price quote for a coding outcome. Before calling: resolve the current repository's GitHub remote URL and exact 40-character HEAD commit SHA; confirm HEAD is pushed and the worktree has no uncommitted changes; ask the user to create and push a GitHub repository if no GitHub remote exists; and turn the request into a bounded contract with a description, acceptance criteria, and prohibited changes. After calling, present the exact price and complete contract to the user. Do not call accept_quote_and_start without their explicit approval. This hackathon release currently accepts only its pinned calculator fixture and rejects other repositories or contracts safely.",
         inputSchema: createQuoteInputSchema.shape,
         title: "Quote task",
       },
@@ -96,7 +96,7 @@ const handler = createMcpHandler(
       "accept_quote_and_start",
       {
         description:
-          "Accept an exact quote contract and asynchronously start its worker.",
+          "Accept an exact quote contract and asynchronously start its worker. Call only after presenting the quote's exact price and complete contract to the user and receiving explicit approval. Pass back the unchanged quote ID and contract hash.",
         inputSchema: {
           contract_hash:
             acceptQuoteInputSchema.shape.contract_hash,
@@ -125,7 +125,7 @@ const handler = createMcpHandler(
       "get_task_status",
       {
         description:
-          "Reconcile and return the worker, verifier, and payment status for a task.",
+          "Reconcile and return worker, verifier, and payment status for a task. Poll until a terminal state, then report the resulting branch or pull request, verification result, and payment status. Surface worker or verification failures without claiming completion.",
         inputSchema: {
           task_id: z.string().uuid(),
         },

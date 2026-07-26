@@ -327,17 +327,36 @@ uniquely identified sandbox task:
 
 ### SCOPE-001 — Only one repository, SHA, and task contract are eligible
 
-- **Status:** Intentional hackathon boundary; not a bug
+- **Status:** Open product gap; intentionally fails closed in the hackathon build
 - **Area:** Product eligibility
 - **Nature:** Outcomes rejects all work except the pinned public calculator
-  fixture and exact zero-division contract.
-- **Next action:** Before widening scope, implement GitHub customer onboarding,
-  immutable repository snapshots, a semantic contractability classifier, and
-  safe server-owned verifier profiles or a real verifier sandbox.
+  fixture and exact zero-division contract. The MCP schema cannot yet carry a
+  base branch or declared verification commands, pricing analyzes the fixture
+  manifest, and GitHub verification dispatches a fixture-owned workflow.
+- **Customer impact:** A coding agent can resolve a real repository URL and SHA
+  and request a quote, but the quote is rejected before work starts.
+- **Next action:**
+  1. Add `base_branch` and bounded verification intent to the immutable quote
+     contract, contract hash, persistence, worker input, and API responses.
+  2. Validate arbitrary public GitHub URLs, exact pushed 40-character SHAs, and
+     repository accessibility with actionable errors.
+  3. Build repository manifests from immutable GitHub snapshots and replace the
+     fixed AUD 12.50 fixture assumptions with versioned general underwriting.
+  4. Pass repository URL, SHA, base branch, and the complete contract into the
+     worker while preserving branch/PR creation.
+  5. Replace the fixture workflow with trusted general verification that can
+     evaluate declared acceptance criteria without executing untrusted
+     customer-supplied shell commands.
+  6. Return repository, worker, verification, and payment failures clearly and
+     continue charging only after trusted verification succeeds.
 - **Safety rule:** Never expose customer-supplied shell commands as verifier
   input, and never let semantic classification loosen deterministic hard gates.
-- **Done when:** Additional task families pass a positive, negative, ambiguous,
-  and prompt-injection regression corpus with trusted independent verification.
+- **Done when:** An agent can resolve the current GitHub remote, SHA, and base
+  branch; quote an arbitrary bounded task; present its exact contract for
+  explicit approval; start a worker; poll to a terminal state; and return the
+  branch/PR, verification evidence, and payment status. Positive, negative,
+  inaccessible-repository, invalid-SHA, missing-test, ambiguous, and
+  prompt-injection cases must all be covered.
 
 ### LIFE-001 — Cancellation, remediation, and delivery policy are undefined
 

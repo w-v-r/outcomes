@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { QuoteVisual } from "@/components/quote-visual";
 
 const ArrowUpRight = () => {
@@ -51,18 +49,6 @@ const Header = () => {
           aria-label="Primary navigation"
           className="flex items-center gap-4 sm:gap-7"
         >
-          <Link
-            className="hidden text-sm text-muted transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt sm:block"
-            href="/benchmarking"
-          >
-            Benchmarking
-          </Link>
-          <Link
-            className="hidden text-sm text-muted transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt md:block"
-            href="/blog/incentives"
-          >
-            Incentives
-          </Link>
           <a
             className="inline-flex items-center gap-3 border border-ink bg-ink px-6 py-2.5 text-xs font-semibold text-paper transition-colors hover:border-cobalt hover:bg-cobalt focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
             href="/sign-in"
