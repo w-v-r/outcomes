@@ -1,9 +1,10 @@
-# Known bugs to fix
+# Known bugs and loose ends
 
-This document records reproducible defects and external integration problems
-that need follow-up. Keep expected behavior, observed evidence, attempted fixes,
-workarounds, and acceptance criteria together so an issue can be resumed without
-repeating the investigation.
+This document records reproducible defects, external integration problems, and
+unfinished production work. Keep expected behavior, observed evidence,
+attempted fixes, workarounds, and acceptance criteria together so an issue can
+be resumed without repeating the investigation. Items explicitly marked as
+loose ends are not claims that the current hackathon slice is broken.
 
 ## Resolved
 
@@ -165,11 +166,240 @@ uniquely identified sandbox task:
 7. A repeated delivery is acknowledged without a second charge or duplicate
    processing.
 
-## Related follow-ups that are not confirmed bugs
+## Open loose ends
 
-- Add scheduled Events API or Payments API reconciliation.
-- Add rejected-payment, timeout, concurrency, duplicate-execution, and RLS
-  isolation tests.
-- Define monitoring and alerting for webhook failures before live mode.
-- Enable Supabase leaked-password protection in the Auth dashboard before
-  production use.
+### CTRL-002 — Cursor model pricing and execution budget are not enforced
+
+- **Status:** Open loose end; high-priority cost risk
+- **Area:** Worker execution / underwriting
+- **Nature:** The rate card specifies Composer 2.5 with `fast=false`, but the
+  product worker currently passes only the model ID to Cursor. The persisted
+  soft token, cost, tool-call, and wall-clock allowances are not supplied to or
+  enforced by the asynchronous worker.
+- **Evidence:** The completed production task returned no usage record or actual
+  delivery cost, so the selected model variant and quote margin were not
+  reconciled against provider billing.
+- **Why it matters:** A fixed customer quote is only economically credible when
+  Outcomes can select the priced model variant, observe actual cost, and stop or
+  contain overruns.
+- **Next action:** Pass versioned model parameters explicitly, retrieve
+  authoritative Cursor usage/cost, enforce available run limits, and alert on
+  missing or over-budget usage.
+- **Done when:** A live run proves the expected model variant, persists usage
+  and provider cost, and demonstrates a tested over-budget outcome.
+
+### CTRL-003 — Task progress depends on customer status polling
+
+- **Status:** Open architectural loose end; high priority
+- **Area:** Control-plane orchestration
+- **Nature:** `get_task_status` performs worker reconciliation, verifier
+  dispatch/reconciliation, and verified-task charging. There is no independent
+  scheduler, queue consumer, or provider callback advancing the task.
+- **Why it matters:** If the customer stops polling, a finished worker can
+  remain unreconciled and the verifier and payment stages may never run.
+- **Next action:** Add a bounded scheduled reconciler or queue-backed worker
+  that claims non-terminal tasks idempotently. Keep status reads safe but do not
+  make them responsible for progress.
+- **Done when:** An accepted task reaches a terminal state without any customer
+  status request after acceptance.
+
+### CTRL-004 — Verifier dispatch recovery needs stronger duplicate protection
+
+- **Status:** Open loose end
+- **Area:** GitHub Actions verification
+- **Nature:** A workflow may be successfully dispatched but not discovered
+  within the short run-ID lookup window. A later status request can dispatch
+  another workflow because the first run ID was never persisted.
+- **Why it matters:** Duplicate verification runs waste capacity and complicate
+  evidence selection even though they cannot create a duplicate payment.
+- **Next action:** Persist a dispatch attempt identifier before calling GitHub,
+  search by task ID before every dispatch, widen asynchronous discovery, and add
+  a duplicate-dispatch test.
+- **Done when:** Delayed GitHub run visibility still resolves to exactly one
+  trusted verifier run.
+
+### SEC-001 — Public usage has no rate, concurrency, or spend controls
+
+- **Status:** Open loose end; required before broad public access
+- **Area:** Abuse prevention / cost control
+- **Nature:** A customer with a ready sandbox billing account and API key can
+  submit repeated eligible tasks. Authentication and idempotency exist, but
+  per-customer rate limits, concurrent-run limits, daily spend limits, and an
+  operator kill switch do not.
+- **Why it matters:** Pinch is in sandbox mode while Cursor usage can incur a
+  real cost to the single Outcomes-owned account.
+- **Next action:** Add API throttling, one-active-task limits, account and global
+  budgets, anomalous-usage alerts, and an emergency execution disable flag.
+- **Done when:** Automated tests prove excess requests fail safely before a
+  worker is launched.
+
+### SEC-002 — Provider credentials are hackathon-grade
+
+- **Status:** Accepted hackathon constraint; open before production
+- **Area:** GitHub / Cursor credentials
+- **Nature:** All work uses one Outcomes-owned Cursor account, and verification
+  uses a GitHub token with repository and workflow access.
+- **Why it matters:** Personal or broadly scoped credentials increase blast
+  radius and make rotation, attribution, and tenant isolation difficult.
+- **Next action:** Move to dedicated service identities, a least-privilege
+  GitHub App or fine-grained token, documented rotation, and auditable secret
+  ownership.
+- **Done when:** No personal credential is required by production and each
+  provider permission is limited to the operation Outcomes performs.
+
+### SEC-003 — Supabase leaked-password protection is disabled
+
+- **Status:** Open project configuration loose end
+- **Area:** Authentication
+- **Evidence:** The Supabase security advisor reports this as the remaining
+  project-level warning.
+- **Next action:** Enable leaked-password protection in the Supabase Auth
+  dashboard and verify signup/sign-in behavior.
+- **Done when:** The security advisor is clear and a compromised-password test
+  is rejected as expected.
+
+### TEST-001 — Destructive and isolation paths need automated coverage
+
+- **Status:** Open testing loose end; high priority
+- **Area:** Control plane / database / payments
+- **Missing coverage:** Rejected Pinch payments, unknown payment outcomes,
+  worker and verifier timeouts, simultaneous acceptance, concurrent status
+  polling, duplicate worker and verifier starts, stale-start recovery,
+  cross-user quote/task/API-key access, and direct RLS isolation.
+- **Why it matters:** The successful path and basic replay behavior are proven,
+  but these are the cases most likely to expose duplicate execution, data
+  leakage, or an invalid charge.
+- **Done when:** Repeatable integration tests exercise each path against a test
+  database and fake providers, with selected sandbox contract tests.
+
+### AUTH-001 — The full authentication lifecycle lacks one continuous trace
+
+- **Status:** Open verification loose end
+- **Area:** Supabase Auth
+- **Missing evidence:** Signup through email-confirmation callback in one
+  controlled session, authenticated sign-out, and confirmation that the
+  protected dashboard redirects to sign-in after sign-out.
+- **Done when:** One browser test captures the complete lifecycle without
+  manual state carried from another browser.
+
+### MCP-001 — Non-Cursor MCP compatibility is documented but not proven
+
+- **Status:** Open compatibility loose end
+- **Area:** MCP distribution
+- **Nature:** The hosted Streamable HTTP endpoint and bearer authentication were
+  tested directly and in Cursor. The README now documents generic MCP clients
+  and custom harnesses, but no second MCP host or official SDK client has
+  completed the lifecycle.
+- **Next action:** Smoke-test initialization, tool discovery, quoting, approval,
+  and status polling from at least one non-Cursor desktop client and one small
+  SDK harness.
+- **Done when:** Client-specific setup notes name the tested products and
+  versions, and both use the same customer API key safely.
+
+### UI-001 — The console does not expose API-created task history
+
+- **Status:** Open product loose end
+- **Area:** Outcomes Console
+- **Nature:** The dashboard supports sandbox billing, its local demonstration,
+  and API-key management. It does not provide dedicated quote/task history,
+  event timelines, worker output, verifier evidence, payment detail, or margin
+  views for work created through MCP or REST.
+- **Why it matters:** Customers currently need their agent or API response to
+  retain task IDs and inspect delivery evidence.
+- **Next action:** Add owned quote and task lists plus task-detail views backed
+  by the existing control-plane records.
+- **Done when:** A customer can find an MCP-created task in the console and
+  inspect its complete contract, output, verification, and payment timeline.
+
+### PRICE-001 — Pricing remains a single-fixture heuristic
+
+- **Status:** Accepted MVP constraint; open research and product work
+- **Area:** Pricing / underwriting
+- **Nature:** The current AUD 12.50 quote uses a deterministic heuristic, fixed
+  exchange rate, fixed risk multiplier, and one model rate. It is not calibrated
+  from a statistically meaningful execution history and does not yet model
+  verification cost, payment fees, remediation, or target margin explicitly.
+- **Next action:** Capture authoritative usage and outcomes, version rate cards
+  and policy inputs, build a labelled evaluation corpus, and compare predicted
+  distributions with actual delivery cost.
+- **Done when:** Backtests establish documented calibration and margin targets
+  across multiple bounded task families.
+
+### SCOPE-001 — Only one repository, SHA, and task contract are eligible
+
+- **Status:** Intentional hackathon boundary; not a bug
+- **Area:** Product eligibility
+- **Nature:** Outcomes rejects all work except the pinned public calculator
+  fixture and exact zero-division contract.
+- **Next action:** Before widening scope, implement GitHub customer onboarding,
+  immutable repository snapshots, a semantic contractability classifier, and
+  safe server-owned verifier profiles or a real verifier sandbox.
+- **Safety rule:** Never expose customer-supplied shell commands as verifier
+  input, and never let semantic classification loosen deterministic hard gates.
+- **Done when:** Additional task families pass a positive, negative, ambiguous,
+  and prompt-injection regression corpus with trusted independent verification.
+
+### LIFE-001 — Cancellation, remediation, and delivery policy are undefined
+
+- **Status:** Open product decision
+- **Area:** Customer lifecycle
+- **Nature:** Once a quote is accepted there is no customer cancellation,
+  retry/rework, review-window, dispute, or remediation operation. A task is
+  considered delivered when a verified branch or pull request exists; Outcomes
+  does not merge it.
+- **Next action:** Define terminal-state semantics, who merges work, cancellation
+  cutoffs, failed-verification remediation, and whether a review window exists
+  before payment.
+- **Done when:** The API, task states, terms, and console all implement the same
+  documented policy.
+
+### PAY-002 — Live-money operations are not designed
+
+- **Status:** Intentional sandbox boundary; blocker for live payments
+- **Area:** Payments / operations / compliance
+- **Missing work:** Live credential separation, production payment-source
+  onboarding, failed-payment recovery, refunds, disputes, settlement
+  reconciliation, customer receipts, support procedures, data retention, PCI
+  scope review, and legal/commercial terms.
+- **Safety rule:** Keep `PINCH_ENVIRONMENT=test` hard-locked until this item and
+  PAY-001 are resolved.
+- **Done when:** Pinch and Outcomes operational procedures have been reviewed,
+  tested in an approved environment, and explicitly authorized for real funds.
+
+### OPS-001 — Background reconciliation, monitoring, and alerting are absent
+
+- **Status:** Open operational loose end
+- **Area:** Reliability
+- **Missing work:** Scheduled Pinch Events or Payments API reconciliation,
+  stuck-task detection, worker/verifier/provider latency metrics, failure-rate
+  dashboards, webhook-delivery alerts, payment mismatch alerts, and runbooks.
+- **Next action:** Define service-level thresholds and add structured telemetry
+  plus alerts before relying on the service outside a supervised demo.
+- **Done when:** A deliberately missed webhook and a deliberately stuck task are
+  detected and reconciled without manual database inspection.
+
+### DIST-001 — Distribution still uses a Vercel alias and manual MCP setup
+
+- **Status:** Open go-to-market loose end; low priority for the hackathon
+- **Area:** Product distribution
+- **Nature:** Customers configure the Vercel production alias manually. There is
+  no custom Outcomes domain, one-click MCP installation, marketplace listing,
+  compatibility matrix, public status page, or API changelog.
+- **Done when:** The production endpoint has a stable owned domain and supported
+  clients have a tested, versioned installation path.
+
+### DOC-001 — Historical planning documents contain stale current-state text
+
+- **Status:** Open documentation loose end
+- **Area:** Repository documentation
+- **Examples:** The early “current repository state” section of
+  `OUTCOMES_IMPLEMENTATION_PLAN.md` still says authentication and control-plane
+  dependencies do not exist; the prototype handoff correctly describes the
+  spike at handoff time but can be mistaken for current product status; and
+  `CONTROL_PLANE_API.md` calls the public fixture private.
+- **Next action:** Mark historical snapshots explicitly and align current-state
+  summaries with the completed vertical slice without deleting useful research
+  history.
+- **Done when:** A new contributor can distinguish current behavior, historical
+  context, intentional constraints, and future work without cross-referencing
+  chat history.
