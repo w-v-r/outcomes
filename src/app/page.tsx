@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { QuoteVisual } from "@/components/quote-visual";
 
 const ArrowUpRight = () => {
@@ -49,18 +51,18 @@ const Header = () => {
           aria-label="Primary navigation"
           className="flex items-center gap-4 sm:gap-7"
         >
-          <a
+          <Link
             className="hidden text-sm text-muted transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt sm:block"
-            href="#how-it-works"
+            href="/benchmarking"
           >
-            How it works
-          </a>
-          <a
+            Benchmarking
+          </Link>
+          <Link
             className="hidden text-sm text-muted transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt md:block"
-            href="#economics"
+            href="/blog/incentives"
           >
-            Economics
-          </a>
+            Incentives
+          </Link>
           <a
             className="inline-flex items-center gap-3 border border-ink bg-ink px-6 py-2.5 text-xs font-semibold text-paper transition-colors hover:border-cobalt hover:bg-cobalt focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
             href="/sign-in"
@@ -73,6 +75,26 @@ const Header = () => {
             <ArrowUpRight />
           </a>
         </nav>
+      </div>
+      <div className="border-t border-ink/15 bg-cobalt-light">
+        <p className="mx-auto flex max-w-[1440px] flex-col gap-1 px-5 py-3 text-xs leading-relaxed sm:flex-row sm:items-center sm:gap-3 sm:px-8 lg:px-12">
+          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-cobalt">
+            Developers
+          </span>
+          <span className="text-muted">
+            Go to{" "}
+            <a
+              className="border-b border-cobalt/50 pb-0.5 font-medium text-cobalt transition-colors hover:border-cobalt hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
+              href="https://github.com/w-v-r/outcomes"
+              rel="noreferrer"
+              target="_blank"
+            >
+              GitHub
+            </a>{" "}
+            to get Outcomes installed, and sign up with the link above to get
+            access to an API key.
+          </span>
+        </p>
       </div>
     </header>
   );
