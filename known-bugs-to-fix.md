@@ -5,6 +5,51 @@ that need follow-up. Keep expected behavior, observed evidence, attempted fixes,
 workarounds, and acceptance criteria together so an issue can be resumed without
 repeating the investigation.
 
+## Resolved
+
+### CTRL-001 — GitHub token cannot install the trusted verifier workflow
+
+- **Status:** Resolved on 26 July 2026
+- **First observed:** 26 July 2026
+- **Area:** Control plane / trusted verification
+- **Impact:** Cursor Cloud completes the allowlisted task and opens a correct
+  pull request, but Outcomes fails closed before verification and payment.
+
+#### Evidence
+
+- Live task `2a8966ab-3542-4982-9ff2-a4a664f842b0` started Cursor agent
+  `bc-e4b55d15-2aed-4450-9293-13668840e2cd`.
+- Cursor opened
+  `https://github.com/w-v-r/agent-cost-benchmark-fixture/pull/1`.
+- The diff changes only `src/calculator.js` and implements the expected
+  zero-divisor error.
+- The GitHub CLI token has `repo` scope but not `workflow` scope.
+- GitHub returned `404` when creating
+  `.github/workflows/outcomes-verify.yml` through both the Contents API and Git
+  Data API.
+- `get_task_status` returned `verifier_dispatch_failed`; no payment was
+  submitted.
+
+#### Resolution performed
+
+1. Granted the GitHub CLI token `workflow` scope.
+2. Installed the fixed `outcomes-verify.yml` workflow on the fixture default
+   branch and added task-specific run names in commit
+   `4aff18a256039f727b54d3cc48b65e8e8eab7bb7`.
+3. Repinned `FIXTURE_REPOSITORY.baselineSha` to that commit.
+4. Changed verification to use each task's persisted repository SHA rather than
+   the current registry SHA, preserving old quote contracts after repins.
+
+#### Resolution criteria
+
+- The workflow is present on the default branch.
+- Task `2a8966ab-3542-4982-9ff2-a4a664f842b0` recorded successful GitHub
+  Actions run `30193586555`.
+- The task moved from `worker_succeeded` to `verified` and then `completed`.
+- Exactly one Pinch sandbox payment, `pmt_K7uETwrp4p0J4X`, was recorded.
+- Repeated status and acceptance requests reused the same payment and Cursor
+  run.
+
 ## Open
 
 ### PAY-001 — Pinch sandbox does not deliver realtime-payment webhooks
@@ -122,9 +167,9 @@ uniquely identified sandbox task:
 
 ## Related follow-ups that are not confirmed bugs
 
-- Extract a reusable `chargeVerifiedTask(taskId)` service for the dashboard and
-  future MCP worker.
 - Add scheduled Events API or Payments API reconciliation.
 - Add rejected-payment, timeout, concurrency, duplicate-execution, and RLS
   isolation tests.
 - Define monitoring and alerting for webhook failures before live mode.
+- Enable Supabase leaked-password protection in the Auth dashboard before
+  production use.

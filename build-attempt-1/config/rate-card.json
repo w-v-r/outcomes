@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "models": [
+    {
+      "id": "composer-2.5",
+      "label": "Cursor Composer 2.5 standard",
+      "inputPerMillionUsd": 0.5,
+      "outputPerMillionUsd": 2.5,
+      "cacheReadPerMillionUsd": 0.2,
+      "cacheWritePerMillionUsd": 0,
+      "modelParams": [
+        {
+          "id": "fast",
+          "value": "false"
+        }
+      ],
+      "source": "https://cursor.com/docs/models-and-pricing",
+      "effectiveDate": "2026-07-25"
+    }
+  ]
+}

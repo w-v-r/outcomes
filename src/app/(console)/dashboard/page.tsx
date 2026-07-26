@@ -2,8 +2,24 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SandboxPaymentDemo } from "@/components/billing/sandbox-payment-demo";
+import { ApiKeyManager } from "@/components/console/api-key-manager";
+import { listCustomerApiKeys } from "@/lib/api-keys/service";
 import { getAuthenticatedUser } from "@/lib/auth/get-authenticated-user";
 import { createClient } from "@/lib/supabase/server";
+
+const getMcpEndpoint = () => {
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (configuredUrl) {
+    return `${configuredUrl.replace(/\/$/u, "")}/api/mcp`;
+  }
+
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/mcp`;
+  }
+
+  return "http://localhost:3000/api/mcp";
+};
 
 const DashboardPage = async () => {
   const user = await getAuthenticatedUser();
@@ -13,7 +29,7 @@ const DashboardPage = async () => {
   }
 
   const supabase = await createClient();
-  const [{ data: billingAccount }, { data: latestTask }] = await Promise.all([
+  const [{ data: billingAccount }, { data: latestTask }, apiKeys] = await Promise.all([
     supabase
       .from("billing_accounts")
       .select("id, provider_payer_id, status")
@@ -23,9 +39,11 @@ const DashboardPage = async () => {
       .from("tasks")
       .select("id, title, status")
       .eq("user_id", user.id)
+      .like("external_ref", "dashboard-demo-%")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    listCustomerApiKeys(user.id).catch(() => []),
   ]);
 
   const [{ data: paymentSource }, { data: quote }, { data: payment }] =
@@ -175,6 +193,8 @@ const DashboardPage = async () => {
             }
           />
         </section>
+
+        <ApiKeyManager apiKeys={apiKeys} mcpEndpoint={getMcpEndpoint()} />
 
         <div className="mt-12 flex flex-col justify-between gap-6 border-t border-paper/15 pt-6 text-sm text-paper/40 sm:flex-row sm:items-center">
           <p>

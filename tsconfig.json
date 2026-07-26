@@ -36,6 +36,7 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
+    "build-attempt-1",
     "node_modules"
   ]
 }

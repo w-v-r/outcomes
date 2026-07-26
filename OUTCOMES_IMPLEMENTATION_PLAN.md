@@ -609,5 +609,24 @@ Remaining verification:
 
 ## Next action
 
-Complete the remaining sign-out smoke check, then begin **Phase 2: Customer
-records and API keys**.
+Status on 26 July 2026:
+
+- **Phase 2 — Customer records and API keys:** implemented.
+- **Phase 3 — Quotes and outcome contracts:** implemented for the strict pinned
+  fixture contract.
+- **Phase 4 — Task execution:** implemented with asynchronous Cursor Cloud
+  launch and polling.
+- **Phase 5 — Status, evidence, and verification:** implemented and verified
+  with a fixed GitHub Actions workflow (`CTRL-001` resolved).
+- **Phase 6 — Pinch onboarding and payment:** sandbox payment and shared
+  verified-task charging implemented; provider webhook delivery remains
+  `PAY-001`.
+- **Phase 7 — MCP interface:** implemented at `/api/mcp` with the three planned
+  authenticated tools.
+
+The complete hackathon path has now been observed in production: customer key,
+immutable quote, idempotent acceptance, Cursor Cloud execution, trusted GitHub
+verification, and one approved Pinch sandbox charge. The next product action is
+to expose task/quote history in dedicated console views and add broader
+concurrency, RLS-isolation, timeout, rejected-payment, and reconciliation tests
+without widening the current repository/task eligibility boundary.

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeReadFile": [
+      {
+        "command": "node .cursor/hooks/cost-guard.mjs",
+        "failClosed": true,
+        "timeout": 5
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "node .cursor/hooks/cost-guard.mjs",
+        "failClosed": true,
+        "timeout": 5
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": "node .cursor/hooks/cost-guard.mjs",
+        "failClosed": true,
+        "timeout": 5
+      }
+    ]
+  }
+}

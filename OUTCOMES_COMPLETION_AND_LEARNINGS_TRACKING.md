@@ -218,10 +218,98 @@ The unresolved delivery issue is tracked as `PAY-001` in
 
 - Resolve `PAY-001` with Pinch and capture one genuine Pinch-origin webhook.
 - Add periodic reconciliation through the Pinch Events or Payments API.
-- Extract `chargeVerifiedTask(taskId)` from the dashboard Server Action.
-- Make the dashboard and future MCP worker use the same charging service.
 - Add automated rejected-payment, timeout, concurrent-completion, duplicate
   execution, and cross-user RLS tests.
 - Define live-mode compliance, operational alerting, refund, and settlement
   procedures before enabling real funds.
+
+## 26 July 2026 — Phase 3: MCP and worker vertical slice
+
+Status: **complete live sandbox vertical slice verified**.
+
+### Implemented
+
+- Added customer API keys with one-time display, SHA-256-only storage, prefix
+  lookup, constant-time verification, last-used tracking, and revocation.
+- Added strict bearer authentication shared by REST and MCP.
+- Ported the deterministic pricing kernel into server-only product modules.
+- Added a fail-closed policy for the exact calculator fixture repository, pinned
+  SHA, and zero-division contract.
+- Added explicit rejection for changed SHAs, unknown task shapes,
+  contradictory outcomes, and revenue guarantees.
+- Added immutable AUD quotes with an AUD 12.50 floor, expiry, canonical contract
+  hash, private underwriting records, and request idempotency.
+- Added atomic quote acceptance through a service-role-only Postgres RPC.
+- Added asynchronous Cursor Cloud launch with persisted agent/run identifiers,
+  provider-neutral worker interfaces, bounded prompts, and status reattachment.
+- Added append-only task events and precise worker, verifier, payment, and
+  failure states.
+- Added a GitHub Actions verifier adapter that can dispatch only the fixed
+  `outcomes-verify.yml` workflow and never accepts customer commands.
+- Extracted `chargeVerifiedTask(taskId)` and made both dashboard and control
+  plane use the same deterministic Pinch nonce and one-payment-per-task guard.
+- Added canonical REST operations:
+  - `POST /api/v1/quotes`
+  - `POST /api/v1/quotes/:quoteId/accept`
+  - `GET /api/v1/tasks/:taskId`
+- Added authenticated Streamable HTTP MCP at `/api/mcp` with exactly
+  `quote_task`, `accept_quote_and_start`, and `get_task_status`.
+- Applied and linted the control-plane migrations in the linked Supabase
+  project.
+
+### Directly observed verification
+
+- Nine unit tests pass across API-key, pricing, eligibility, quote, and worker
+  prompt boundaries.
+- ESLint, TypeScript, and the Next.js production build pass.
+- Supabase migration history is aligned and `db lint` reports no schema errors.
+- Supabase security advisors were reduced to the project-level leaked-password
+  protection setting; the exposed `rls_auto_enable()` execution grants were
+  revoked.
+- The authenticated dashboard created and revoked a real customer API key.
+- Missing bearer credentials return `401` for REST and MCP.
+- An eligible quote returned `201`, AUD 12.50, a 64-character contract hash,
+  and the pinned repository identity.
+- Repeating the request returned the same quote with `replayed: true`.
+- A contradictory task returned `422`, was recorded as rejected, and created no
+  worker.
+- MCP initialization and `tools/list` returned the exact three intended tools.
+- Accepting the quote returned `202` with task, Cursor agent, and run IDs.
+- Cursor Cloud created pull request
+  `w-v-r/agent-cost-benchmark-fixture#1`, changing only
+  `src/calculator.js` with the expected zero-division fix.
+- Installed the fixed trusted workflow after granting the required GitHub
+  `workflow` OAuth scope.
+- GitHub Actions run `30193586555` verified the exact Cursor result branch and
+  concluded `success`.
+- The task moved through `worker_succeeded`, `verifying`, `verified`,
+  `charging`, and `completed`.
+- Pinch sandbox payment `pmt_K7uETwrp4p0J4X` charged the exact AUD 12.50 quote
+  and returned `approved`.
+- Repeating task status preserved the same payment ID with one payment event.
+- Repeating quote acceptance reused the same task, Cursor agent, and run.
+- Both temporary smoke-test API keys were revoked after verification.
+
+### Resolved implementation blocker
+
+GitHub initially returned `404` for workflow-file writes because the GitHub CLI
+OAuth token had `repo` but not `workflow` scope. After explicit authorization,
+the workflow was installed and given a task-specific run name so dispatch can
+reliably discover its run ID. The fixture is now pinned to
+`4aff18a256039f727b54d3cc48b65e8e8eab7bb7`. Each task still verifies against
+its own persisted repository SHA, so later registry repins cannot alter an
+already accepted contract.
+
+### Learnings
+
+- A successful Cursor run and a correct pull request are delivery evidence, not
+  authorization to charge.
+- A strict repository/task registry can safely prove the product loop before a
+  semantic classifier exists.
+- REST and MCP must call the same services; otherwise idempotency, ownership,
+  and payment rules drift.
+- Dashboard demo controls must be isolated from API-created tasks so a manual
+  demo action cannot bypass trusted verification.
+- GitHub workflow-file writes require a distinct OAuth `workflow` scope even
+  when the token has full private-repository access.
 

@@ -1,3 +1,6 @@
 .env*
+build-attempt-1/artifacts/
+build-attempt-1/dist/
+build-attempt-1/node_modules/
 payments-chat-context*.md
 supabase/.temp/

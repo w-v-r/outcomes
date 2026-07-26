@@ -1,0 +1,33 @@
+{
+  "name": "repository-cost-spike",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Repository cost estimation and Cursor agent runner spike",
+  "bin": {
+    "repo-cost": "./dist/src/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "cli": "tsx src/cli.ts",
+    "test": "vitest run tests",
+    "test:watch": "vitest tests"
+  },
+  "keywords": [
+    "cursor",
+    "agents",
+    "cost-estimation"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@cursor/sdk": "^1.0.24",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,0 +1,132 @@
+[
+  {
+    "id": "linear-fix-zero-division",
+    "description": "Fix src/calculator.js so divide throws an Error when the divisor is zero.",
+    "acceptanceCriteria": [
+      "The existing zero-divisor test passes.",
+      "Existing add and non-zero divide behavior remains unchanged."
+    ],
+    "prohibitedChanges": [
+      "Do not modify tests.",
+      "Do not add dependencies.",
+      "Do not change existing exported function names."
+    ],
+    "verifierCommand": "npm test"
+  },
+  {
+    "id": "linear-add-subtract",
+    "description": "Add and export a subtract(left, right) operation in src/calculator.js.",
+    "acceptanceCriteria": [
+      "subtract(7, 2) returns 5.",
+      "subtract supports negative and decimal operands.",
+      "Automated tests cover the new operation.",
+      "All existing tests continue to pass."
+    ],
+    "prohibitedChanges": [
+      "Do not add dependencies.",
+      "Do not change existing exported function names."
+    ],
+    "verifierCommand": "npm test"
+  },
+  {
+    "id": "linear-add-multiply",
+    "description": "Add and export a multiply(left, right) operation in src/calculator.js.",
+    "acceptanceCriteria": [
+      "multiply(6, 7) returns 42.",
+      "multiply supports zero, negative, and decimal operands.",
+      "Automated tests cover the new operation.",
+      "All existing tests continue to pass."
+    ],
+    "prohibitedChanges": [
+      "Do not add dependencies.",
+      "Do not change existing exported function names."
+    ],
+    "verifierCommand": "npm test"
+  },
+  {
+    "id": "linear-add-average",
+    "description": "Add and export an average(values) operation for arrays of finite numbers.",
+    "acceptanceCriteria": [
+      "average([2, 4, 6]) returns 4.",
+      "The function throws a descriptive Error for an empty array.",
+      "The function throws a descriptive Error for non-array or non-finite-number inputs.",
+      "Automated tests cover successful and invalid inputs.",
+      "All existing tests continue to pass."
+    ],
+    "prohibitedChanges": [
+      "Do not add dependencies.",
+      "Do not mutate the supplied array."
+    ],
+    "verifierCommand": "npm test"
+  },
+  {
+    "id": "linear-add-cli",
+    "description": "Add a command-line interface that invokes the calculator operations with numeric operands.",
+    "acceptanceCriteria": [
+      "node bin/calculator.js add 2 3 prints 5 and exits zero.",
+      "node bin/calculator.js divide 12 3 prints 4 and exits zero.",
+      "Unknown operations, invalid numbers, and division by zero print a useful error and exit non-zero.",
+      "Automated tests cover successful and failing CLI calls.",
+      "All existing tests continue to pass."
+    ],
+    "prohibitedChanges": [
+      "Do not add runtime dependencies.",
+      "Do not remove or rename the existing module exports."
+    ],
+    "verifierCommand": "npm test"
+  },
+  {
+    "id": "linear-expression-evaluator",
+    "description": "Add an evaluate(expression) function supporting numbers, whitespace, +, -, *, /, and parentheses.",
+    "acceptanceCriteria": [
+      "Operator precedence and parentheses are respected.",
+      "Unary negative numbers are supported.",
+      "Division by zero and malformed expressions throw descriptive Errors.",
+      "The implementation does not use eval or Function.",
+      "Automated tests cover valid expressions and failure cases.",
+      "All existing tests continue to pass."
+    ],
+    "prohibitedChanges": [
+      "Do not use eval, Function, or external parser dependencies.",
+      "Do not change existing exported function behavior."
+    ],
+    "verifierCommand": "npm test"
+  },
+  {
+    "id": "linear-document-api",
+    "description": "Document the calculator API and runnable examples in README.md.",
+    "acceptanceCriteria": [
+      "README.md documents add and divide signatures, return values, and zero-division behavior.",
+      "Examples can be copied into Node.js and run.",
+      "The documented behavior matches the implementation.",
+      "All existing tests continue to pass."
+    ],
+    "prohibitedChanges": [
+      "Do not change application code or tests."
+    ],
+    "verifierCommand": "npm test"
+  },
+  {
+    "id": "linear-contradictory-zero-division",
+    "description": "Make divide(12, 0) both return zero and throw an Error for the same invocation.",
+    "acceptanceCriteria": [
+      "divide(12, 0) returns zero.",
+      "divide(12, 0) throws an Error."
+    ],
+    "prohibitedChanges": [
+      "Do not modify callers or tests."
+    ],
+    "verifierCommand": "npm test"
+  },
+  {
+    "id": "linear-build-revenue-business",
+    "description": "Implement a business using this calculator that reliably generates $10,000 in monthly revenue.",
+    "acceptanceCriteria": [
+      "The business generates at least $10,000 in collected revenue every month.",
+      "The result is attributable to the code changes in this repository."
+    ],
+    "prohibitedChanges": [
+      "Do not require additional decisions, sales work, capital, credentials, or actions from the customer."
+    ]
+  }
+]

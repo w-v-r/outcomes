@@ -1,0 +1,14 @@
+{
+  "id": "successful-zero-division-fix",
+  "description": "Fix src/calculator.js so divide throws an Error when the divisor is zero.",
+  "acceptanceCriteria": [
+    "The existing zero-divisor test passes.",
+    "Existing add and non-zero divide behavior remains unchanged."
+  ],
+  "prohibitedChanges": [
+    "Do not modify tests.",
+    "Do not add dependencies.",
+    "Do not change the exported function names."
+  ],
+  "verifierCommand": "npm test"
+}
