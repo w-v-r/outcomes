@@ -45,7 +45,10 @@ const Header = () => {
     <header className="border-b border-ink/15">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5 sm:px-8 lg:px-12">
         <Wordmark />
-        <nav aria-label="Primary navigation" className="flex items-center gap-7">
+        <nav
+          aria-label="Primary navigation"
+          className="flex items-center gap-4 sm:gap-7"
+        >
           <a
             className="hidden text-sm text-muted transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt sm:block"
             href="#how-it-works"
@@ -57,6 +60,12 @@ const Header = () => {
             href="#economics"
           >
             Economics
+          </a>
+          <a
+            className="text-sm text-muted transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
+            href="/sign-in"
+          >
+            Sign in
           </a>
           <a
             className="inline-flex items-center gap-2 border border-ink bg-ink px-4 py-2.5 text-xs font-medium text-paper transition-colors hover:border-cobalt hover:bg-cobalt focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
