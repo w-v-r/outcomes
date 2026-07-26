@@ -1,0 +1,3 @@
+.env*
+payments-chat-context*.md
+supabase/.temp/

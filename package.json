@@ -5,7 +5,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "pinch:webhook:configure": "node scripts/configure-pinch-webhook.mjs",
+    "pinch:webhook:test": "node scripts/test-pinch-webhook.mjs",
+    "payments:mock-worker": "node scripts/run-mock-worker-payment.mjs"
   },
   "keywords": [],
   "author": "",
