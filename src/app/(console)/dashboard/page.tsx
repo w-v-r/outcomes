@@ -1,16 +1,72 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-const DashboardPage = () => {
+import { SandboxPaymentDemo } from "@/components/billing/sandbox-payment-demo";
+import { getAuthenticatedUser } from "@/lib/auth/get-authenticated-user";
+import { createClient } from "@/lib/supabase/server";
+
+const DashboardPage = async () => {
+  const user = await getAuthenticatedUser();
+
+  if (!user) {
+    redirect("/sign-in");
+  }
+
+  const supabase = await createClient();
+  const [{ data: billingAccount }, { data: latestTask }] = await Promise.all([
+    supabase
+      .from("billing_accounts")
+      .select("id, provider_payer_id, status")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("tasks")
+      .select("id, title, status")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const [{ data: paymentSource }, { data: quote }, { data: payment }] =
+    await Promise.all([
+      billingAccount
+        ? supabase
+            .from("payment_sources")
+            .select("card_scheme, last_four")
+            .eq("billing_account_id", billingAccount.id)
+            .eq("user_id", user.id)
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      latestTask
+        ? supabase
+            .from("quotes")
+            .select("id, amount_cents, status, terms")
+            .eq("task_id", latestTask.id)
+            .eq("user_id", user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      latestTask
+        ? supabase
+            .from("payments")
+            .select("provider_payment_id, status")
+            .eq("task_id", latestTask.id)
+            .eq("user_id", user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-paper/15 px-5 py-5 sm:px-8 lg:px-12">
         <div className="flex items-center justify-between gap-6">
           <p className="font-mono text-[10px] uppercase tracking-[0.19em] text-paper/40">
-            Control plane / Overview
+            Control plane / Payments
           </p>
           <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.17em] text-paper/35">
             <span className="size-1.5 bg-cobalt" aria-hidden="true" />
-            Private session
+            Pinch test environment
           </div>
         </div>
       </header>
@@ -18,19 +74,19 @@ const DashboardPage = () => {
       <div className="px-5 py-12 sm:px-8 sm:py-16 lg:px-12 lg:py-20">
         <section className="max-w-5xl">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cobalt">
-            Console foundation
+            Sandbox payment rail
           </p>
           <h1 className="mt-6 text-[clamp(3rem,7vw,7.2rem)] font-medium leading-[0.86] tracking-[-0.07em]">
-            The control plane
+            Quote. Prove.
             <br />
             <span className="font-serif font-normal italic text-paper/65">
-              starts here.
+              Then charge.
             </span>
           </h1>
           <p className="mt-8 max-w-2xl text-base leading-relaxed text-paper/50 sm:text-lg">
-            Your identity is connected and this workspace is private. API keys,
-            task quotes, evidence, and billing will be added to this same
-            ledger as each control-plane layer comes online.
+            This console demonstrates the complete Outcomes contract: persist a
+            fixed quote, record explicit approval, verify the work, then submit
+            exactly one payment to Pinch.
           </p>
         </section>
 
@@ -39,7 +95,7 @@ const DashboardPage = () => {
           className="mt-16 border-y border-paper/15"
         >
           <h2 className="sr-only" id="foundation-status">
-            Foundation status
+            Sandbox integration status
           </h2>
           <div className="grid md:grid-cols-3">
             <div className="border-b border-paper/15 py-7 md:border-b-0 md:border-r md:pr-8">
@@ -48,118 +104,89 @@ const DashboardPage = () => {
                   Identity
                 </p>
                 <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-cobalt">
-                  Active
+                  Confirmed
                 </span>
               </div>
               <p className="mt-5 text-xl tracking-[-0.03em]">
-                Supabase session
+                {user.email}
               </p>
             </div>
 
             <div className="border-b border-paper/15 py-7 md:border-b-0 md:border-r md:px-8">
               <div className="flex items-center justify-between gap-4">
                 <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-paper/35">
-                  API access
+                  Pinch payer
                 </p>
-                <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-paper/30">
-                  Next
+                <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-cobalt">
+                  {billingAccount?.status ?? "pending"}
                 </span>
               </div>
               <p className="mt-5 text-xl tracking-[-0.03em]">
-                No keys issued
+                {billingAccount?.provider_payer_id ?? "Not connected"}
               </p>
             </div>
 
             <div className="py-7 md:pl-8">
               <div className="flex items-center justify-between gap-4">
                 <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-paper/35">
-                  Task ledger
+                  Test source
                 </p>
-                <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-paper/30">
-                  Empty
+                <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-cobalt">
+                  Vaulted
                 </span>
               </div>
               <p className="mt-5 text-xl tracking-[-0.03em]">
-                Ready for first quote
+                {paymentSource
+                  ? `${paymentSource.card_scheme?.toUpperCase() ?? "CARD"} •••• ${paymentSource.last_four}`
+                  : "Awaiting source"}
               </p>
             </div>
           </div>
         </section>
 
-        <div className="mt-16 grid gap-12 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-          <section aria-labelledby="next-layers">
-            <div className="flex items-end justify-between gap-6 border-b border-paper/15 pb-5">
-              <div>
-                <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-paper/35">
-                  Build sequence
-                </p>
-                <h2
-                  className="mt-3 text-2xl tracking-[-0.04em]"
-                  id="next-layers"
-                >
-                  The next control layers
-                </h2>
-              </div>
-              <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-paper/25">
-                0 / 3
-              </span>
-            </div>
+        <section aria-label="Pinch sandbox payment demonstration" className="mt-16">
+          <SandboxPaymentDemo
+            payment={
+              payment
+                ? {
+                    providerPaymentId: payment.provider_payment_id,
+                    status: payment.status,
+                  }
+                : null
+            }
+            quote={
+              quote
+                ? {
+                    amountCents: quote.amount_cents,
+                    id: quote.id,
+                    status: quote.status,
+                    terms: quote.terms,
+                  }
+                : null
+            }
+            task={
+              latestTask
+                ? {
+                    id: latestTask.id,
+                    status: latestTask.status,
+                    title: latestTask.title,
+                  }
+                : null
+            }
+          />
+        </section>
 
-            <ol>
-              <li className="grid grid-cols-[56px_1fr] border-b border-paper/10 py-6">
-                <span className="font-mono text-xs text-cobalt">01</span>
-                <div>
-                  <h3 className="text-base">Issue an API key</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-paper/40">
-                    Give coding agents a revocable identity without exposing
-                    your Supabase credentials.
-                  </p>
-                </div>
-              </li>
-              <li className="grid grid-cols-[56px_1fr] border-b border-paper/10 py-6">
-                <span className="font-mono text-xs text-paper/30">02</span>
-                <div>
-                  <h3 className="text-base">Quote a bounded task</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-paper/40">
-                    Store the task, acceptance criteria, and fixed customer
-                    price before execution.
-                  </p>
-                </div>
-              </li>
-              <li className="grid grid-cols-[56px_1fr] border-b border-paper/10 py-6">
-                <span className="font-mono text-xs text-paper/30">03</span>
-                <div>
-                  <h3 className="text-base">Record proof and payment</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-paper/40">
-                    Keep verification evidence and financial state attached to
-                    the delivered outcome.
-                  </p>
-                </div>
-              </li>
-            </ol>
-          </section>
-
-          <aside className="border border-paper/15 bg-paper/[0.035] p-6 sm:p-8">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-paper/35">
-              Current boundary
-            </p>
-            <p className="mt-5 font-serif text-3xl italic leading-tight text-paper/75">
-              Private by default.
-              <br />
-              Explicit by design.
-            </p>
-            <p className="mt-6 text-sm leading-relaxed text-paper/45">
-              Authentication now protects the console. Future customer data
-              will add row-level ownership and server-authorized lifecycle
-              changes.
-            </p>
-            <Link
-              className="mt-10 inline-flex border-b border-paper/30 pb-1 text-sm text-paper transition-colors hover:border-cobalt hover:text-cobalt focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
-              href="/"
-            >
-              Return to the public site
-            </Link>
-          </aside>
+        <div className="mt-12 flex flex-col justify-between gap-6 border-t border-paper/15 pt-6 text-sm text-paper/40 sm:flex-row sm:items-center">
+          <p>
+            Sandbox only. No real card details are collected and no real funds
+            move.
+          </p>
+          <Link
+            className="w-fit border-b border-paper/30 pb-1 text-paper transition-colors hover:border-cobalt hover:text-cobalt focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
+            href="/"
+          >
+            Return to the public site
+          </Link>
         </div>
       </div>
     </div>

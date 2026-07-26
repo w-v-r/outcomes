@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { ConsoleWordmark } from "@/components/console/console-wordmark";
 import { getAuthenticatedUser } from "@/lib/auth/get-authenticated-user";
+import { hasCompletedBillingSetup } from "@/lib/billing/get-billing-account";
 
 import { signOut } from "./actions";
 
@@ -34,6 +35,10 @@ const DashboardLayout = async ({ children }: DashboardLayoutProps) => {
 
   if (!user) {
     redirect("/sign-in");
+  }
+
+  if (!(await hasCompletedBillingSetup(user.id))) {
+    redirect("/billing/setup");
   }
 
   return (

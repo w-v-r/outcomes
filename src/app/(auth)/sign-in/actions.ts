@@ -75,7 +75,7 @@ export const authenticate = async (
       email,
       password,
       options: {
-        emailRedirectTo: `${requestOrigin}/auth/callback?next=/dashboard`,
+        emailRedirectTo: `${requestOrigin}/auth/callback?next=/billing/setup`,
       },
     });
 
@@ -101,7 +101,7 @@ export const authenticate = async (
       };
     }
 
-    redirect("/dashboard");
+    redirect("/billing/setup");
   }
 
   const { error } = await supabase.auth.signInWithPassword({

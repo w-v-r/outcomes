@@ -35,7 +35,7 @@ type RootLayoutProps = Readonly<{
 
 const RootLayout = ({ children }: RootLayoutProps) => {
   return (
-    <html lang="en">
+    <html data-scroll-behavior="smooth" lang="en">
       <body
         className={`${instrumentSans.variable} ${newsreader.variable} ${ibmPlexMono.variable} antialiased`}
       >
