@@ -335,6 +335,26 @@ uniquely identified sandbox task:
   manifest, and GitHub verification dispatches a fixture-owned workflow.
 - **Customer impact:** A coding agent can resolve a real repository URL and SHA
   and request a quote, but the quote is rejected before work starts.
+- **Unaddressed feedback requirements:**
+  - Arbitrary public GitHub repositories and bounded task shapes are not
+    eligible.
+  - `base_branch` and optional verification commands are absent from the MCP
+    schema, immutable contract, database records, and worker handoff.
+  - Repository accessibility, pushed-SHA existence, and base-branch membership
+    are not preflighted before quoting.
+  - The calling agent is instructed to confirm a pushed, clean HEAD, but the
+    service cannot enforce that state or distinguish unpushed commits.
+  - Pricing still analyzes the calculator fixture manifest rather than the
+    requested immutable repository snapshot.
+  - The worker receives URL, SHA, and task text, but not an explicit base branch
+    or general verification plan.
+  - Verification remains a hard-coded workflow in the fixture repository; it
+    cannot verify declared tests or acceptance criteria for another repository.
+  - Inaccessible repositories, invalid or unreachable SHAs, missing tests, and
+    general verification failures do not yet have dedicated customer-facing
+    error codes.
+  - The complete arbitrary-repository flow—quote, exact approval, execution,
+    polling, PR, verification, and conditional payment—has not been tested.
 - **Next action:**
   1. Add `base_branch` and bounded verification intent to the immutable quote
      contract, contract hash, persistence, worker input, and API responses.
@@ -406,6 +426,23 @@ uniquely identified sandbox task:
   compatibility matrix, public status page, or API changelog.
 - **Done when:** The production endpoint has a stable owned domain and supported
   clients have a tested, versioned installation path.
+
+### DIST-002 — Local Git origin still uses the former repository name
+
+- **Status:** Open repository-maintenance loose end; pushes currently succeed
+  through GitHub redirection
+- **Area:** Source distribution
+- **Evidence:** `origin` is still
+  `git@github.com:w-v-r/outcomes-customer-app.git`, while GitHub reports that
+  the repository moved to `git@github.com:w-v-r/outcomes.git`.
+- **Why it matters:** GitHub redirects the old remote today, but tooling,
+  automation, or a future repository reusing the old name may not preserve that
+  behavior.
+- **Next action:** Update `origin` to the canonical repository URL and verify
+  fetch and push access.
+- **Done when:** Both fetch and push URLs report
+  `git@github.com:w-v-r/outcomes.git` and branch synchronization succeeds
+  without a redirect warning.
 
 ### DOC-001 — Historical planning documents contain stale current-state text
 
