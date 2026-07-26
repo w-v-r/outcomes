@@ -2,5 +2,6 @@ node_modules/
 dist/
 artifacts/
 .repo-cost/
+fixtures/sample-repo/
 .env
 *.log
