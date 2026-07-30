@@ -516,7 +516,7 @@ Status: **implemented, locally verified, and migrated in production**.
   - rejects a base branch that no longer points to the requested SHA;
   - verifies the exact commit and tree;
   - uses a repository-ID-scoped, read-only scan token;
-  - clones the exact SHA into an ephemeral workspace;
+  - streams the exact-SHA GitHub archive into an ephemeral workspace;
   - persists the snapshot before its binding;
   - revokes tokens and removes the workspace on success or failure.
 - Added atomic, versioned installation claims. Reinstallation creates a new
@@ -582,9 +582,9 @@ and migrated in production**.
   optional Linear workspace/team/project/issue metadata and a required
   caller-supplied normalized issue-content SHA-256. Assessments cannot be
   accepted.
-- Separated semantic assessment safety from execution allowlisting.
-  Non-allowlisted repositories can receive planning assessments, but executable
-  quote eligibility remains fail-closed to the pinned fixture contract.
+- Separated semantic assessment safety from execution eligibility. A follow-up
+  live-flow fix allows estimator-approved, safety-checked tasks only when they
+  reference an immutable captured repository binding.
 - Replaced the new path's blanket price with an uncalibrated, versioned variable
   policy. Internal evidence itemizes predicted worker high cost, quote analysis,
   verification, retry/risk, payment, margin, and commercial minimum coverage;
@@ -604,7 +604,7 @@ and migrated in production**.
 ### Verification and limits
 
 - Deterministic tests cover differing manifests/prices, actual snapshot-manifest
-  use, non-allowlisted assessment versus quote rejection, semantic declines,
+  use, immutable non-fixture quote eligibility, semantic declines,
   source hashing, idempotency conflicts, owner-derived access, contract-hash
   changes, and migration invariants.
 - No repository commands are run during quote analysis, and no installation
@@ -617,14 +617,17 @@ and migrated in production**.
 - The migration was applied to the linked production Supabase project. Remote
   migration history and service-role Data API access to `assessments`,
   `quotes`, and `quote_underwriting` were verified after application.
-- No production endpoint or live GitHub capture was verified in this slice.
+- Production capture was subsequently verified against
+  `outcomes-test-org/real-work`. The production adapter now scans a bounded
+  GitHub archive without requiring system Git.
 - Structured model-assisted classification, calibration runs, additional
   executable verifier profiles, generalized worker prompts/task titles, and
   CLI/MCP assessment parity remain future work.
 
 ## 31 July 2026 — Task 3 Outcomes CLI workspace
 
-Status: **implemented locally; not published; not live E2E verified**.
+Status: **implemented and live-verified through production quote, acceptance,
+status, and PR return; not published to npm**.
 
 - Added npm workspaces `@outcomes/contracts`, `@outcomes/client`, and
   `@outcomes/cli` with shared REST DTOs, typed client, and the `outcomes` binary.
@@ -633,22 +636,19 @@ Status: **implemented locally; not published; not live E2E verified**.
   run with Git discovery, idempotency state, JSON output, and stable exit codes.
 - Package and root tests include HTTP fakes, git discovery fixtures, state
   idempotency checks, and anti-drift guards against server kernel imports.
-- **Not claimed:** npm publication, production end-to-end quote/accept/run, or
-  MCP parity for capture/assessment.
+- **Not claimed:** npm publication or MCP parity for capture/assessment.
 
 Post-Task 3 blockers:
 
 - Publish `@outcomes/cli` and document supported `npx` usage against a released
   version.
-- Live-verify capture → quote → accept → watch against production with a
-  supported repository and billing-ready account.
 - Add MCP adapters for capture/assessment or document REST-only agent playbooks.
-- Generalized execution/verification beyond the current allowlisted envelope.
+- Add a second trusted verifier profile and durable external execution runner.
 
 ## 31 July 2026 — Task 4 isolated execution connection
 
-Status: **implemented, deterministically tested, and migrated in production;
-production flow not yet live-verified**.
+Status: **implemented, deterministically tested, migrated in production, and
+live-verified through deterministic draft-PR publication**.
 
 ### Implemented
 
@@ -700,14 +700,15 @@ production flow not yet live-verified**.
 
 - No charge occurs for worker completion or PR creation. Only the pre-existing
   independent verifier can move a task to the payment service.
-- Execution remains fail-closed to the current fixture repository, pinned SHA,
-  exact bounded task, persisted source-file scope, and trusted verifier profile.
+- Execution requires an estimator-approved, safety-checked task, immutable
+  binding, exact SHA, and persisted source-file scope. Verification is scoped
+  to the task repository and base branch.
 - Legacy URL/SHA quotes remain compatible and advance through the prior cloud
   lifecycle; they are not claimed by the binding-backed executor.
-- The Vercel route is only a bounded hackathon runner: worker runtime is eight
-  minutes inside an 800-second route and still depends on `git`, child-process
-  support, writable temporary storage, and adequate memory. Use the
-  local/external reconciler when those are unavailable.
+- Snapshot capture no longer depends on system Git. Isolated execution still
+  requires system Git, child-process support, writable temporary storage, and
+  adequate memory, so the local/external reconciler remains the controlled
+  runner until durable worker hosting is added.
 - Cursor token usage is persisted, but the local SDK result does not provide an
   authoritative provider charge. `actual_cost_usd_micros` remains `null`.
 - Only validated run/change evidence is durable. The isolated checkout and
@@ -715,16 +716,26 @@ production flow not yet live-verified**.
   globally fenced payment claim are production hardening items.
 - The migration was applied to the linked production project. Remote history
   and service-role Data API access to execution, task, and payment evidence
-  were verified. Production cron credentials are configured, but no live
-  Task 4 Cursor run, GitHub publication, verifier run, or payment was performed.
+  were verified. Production cron credentials are configured.
+- Live evidence: task `07f731b5-b89c-4adb-8f22-498cc2f37a93` accepted an AUD
+  6.75 quote, was claimed exactly once by the controlled local runner, persisted
+  Cursor run/usage/publication evidence, and opened
+  [draft PR #2](https://github.com/outcomes-test-org/real-work/pull/2) from the
+  quoted SHA with only `README.md` changed.
+- Live verification exposed and fixed two correctness gaps: Postgres rewrites
+  UTC timestamp text, so contract hashing now normalizes equivalent timestamps;
+  verifier API requests are now scoped to the task repository rather than the
+  legacy fixture.
+- `real-work` has no trusted `outcomes-verify.yml`, so no successful verifier or
+  payment is claimed. The task ended `verification_failed`; a production query
+  confirmed that it has no payment row.
 
 ### Remaining prerequisites
 
-- Deploy the application/cron version that consumes
-  `20260730163203_task_execution_claims.sql`.
 - Keep `CRON_SECRET`, execution credentials, and the Vercel cron configured in
   the deployment project.
-- Run a disposable live capture → quote → accept → draft PR flow, inspect exact
-  ancestry/scope, and verify both successful payment gating and no-charge
-  failure.
-- Add a second trusted repository/verifier profile before widening eligibility.
+- Add the trusted workflow to a second repository and verify both successful
+  sandbox payment gating and no-charge failure.
+- Install the Outcomes GitHub App on `w-v-r` before testing
+  `w-v-r/search-harness`; the current installation covers only
+  `outcomes-test-org`.

@@ -36,9 +36,10 @@ repository snapshot:
 ```
 
 The service verifies the current GitHub installation, canonical repository ID,
-branch tip, commit, and tree; scans an exact-SHA ephemeral checkout without
-running repository code; and returns a `binding.id`, `snapshot_id`, and
-`manifest_hash`. Snapshot and binding records are immutable and user-owned.
+branch tip, commit, and tree; streams and scans a bounded exact-SHA GitHub
+archive without running repository code; and returns a `binding.id`,
+`snapshot_id`, and `manifest_hash`. Snapshot and binding records are immutable
+and user-owned.
 
 ## Non-binding assessment
 
@@ -73,8 +74,8 @@ fingerprints that exact hash rather than fabricating content identity from
 issue IDs or task fields. An assessment always returns
 `"accepted": false`; it cannot be accepted or start work. Unsafe,
 contradictory, and unverifiable external-business-outcome requests decline
-semantically. Repository execution allowlisting is returned separately, so a
-non-allowlisted repository can be assessed without becoming executable.
+semantically. Execution eligibility is returned separately from the planning
+decision and requires a canonical immutable GitHub binding.
 Assessment rows contain internal analysis and underwriting and therefore have
 no authenticated Data API grant or policy. The authenticated REST application
 service is the only customer assessment surface; table RLS remains enabled as
@@ -123,7 +124,7 @@ underwriting evidence.
 Estimator decision is an execution gate:
 
 - `accept` may become a pending executable quote when semantic safety and the
-  repository/task allowlist also pass.
+  immutable repository binding also passes.
 - `accept_with_conditions` is allowed only when its execution conditions are
   present in customer-visible pricing factors and quote terms. Those conditions
   are included in immutable pricing evidence and contract hashing.
@@ -133,8 +134,9 @@ Estimator decision is an execution gate:
 
 The quote contract hash commits to binding ID, snapshot ID, manifest hash,
 canonical repository/base identity, task, pricing evidence, policy version,
-price, terms, and expiry. Execution remains fail-closed to the existing
-allowlisted repository, SHA, task contract, and trusted verifier.
+price, terms, and expiry. Equivalent UTC expiry encodings are normalized before
+hashing so the persisted Postgres timestamp reproduces the presented contract.
+Execution remains fail-closed to immutable repository and safety evidence.
 
 ### Legacy fixture compatibility
 
@@ -200,15 +202,17 @@ Acceptance request:
 Never change an idempotency key's request body. Exact reuse returns the original
 resource; changed task, source, or binding identity returns `409`.
 
-Execution remains limited to the pinned calculator fixture and exact bounded
-zero-division contract. Allowed paths come from persisted underwriting analysis
+Snapshot execution accepts estimator-approved, safety-checked tasks against
+immutable bindings. Allowed paths come from persisted underwriting analysis
 intersected with the immutable manifest; test, manifest, generated, binary, and
 unsupported file shapes are excluded.
 
 Verifier dispatch persists a timestamp and recovery lease; the task ID is the
-provider-visible workflow identity. A crash with no stored run ID searches
-GitHub Actions for that identity; multiple or
-undiscoverable runs fail closed without redispatch or charging. Pinch
+provider-visible workflow identity. Dispatch and recovery are scoped to the
+task repository and base branch; a repository without the trusted
+`outcomes-verify.yml` profile cannot verify or charge. A crash with no stored
+run ID searches GitHub Actions for that identity; multiple or undiscoverable
+runs fail closed without redispatch or charging. Pinch
 `reserved`, `submitting`, and ambiguous states first query the deterministic
 provider nonce and may resubmit only with that same nonce after no replay is
 observed. Each reservation snapshots payer/source IDs, amount, and currency.
@@ -286,5 +290,7 @@ binding-backed task on Cloud.
 This Task 2 implementation has deterministic tests and an isolated local
 Supabase Postgres 17 migration replay with transactional access/evidence
 assertions. Its new migration is applied to production and the remote evidence
-tables are queryable through the service-role Data API. The new REST surfaces
-were not live-verified as part of this change.
+tables are queryable through the service-role Data API. Repository capture,
+snapshot quote, acceptance, task status, deterministic PR publication, and
+no-charge verification failure were subsequently live-verified against
+`outcomes-test-org/real-work`.

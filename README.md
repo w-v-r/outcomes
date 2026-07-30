@@ -167,22 +167,24 @@ the quote and receive explicit approval before calling
 - Immutable, expiring, idempotent fixed-price quotes
 - Atomic quote acceptance and lease-backed isolated Cursor execution
 - Deterministic GitHub App branch, commit, and draft-PR publication
-- Trusted GitHub Actions verification against the quoted repository SHA
+- Repository-scoped GitHub Actions verification when the repository has the
+  trusted verifier workflow
 - Exactly-once Pinch sandbox charging after verified success
 - Scheduled task reconciliation independent of customer status polling
 
-The current quote is AUD 12.50 in sandbox mode. Outcomes rejects other
-repositories, commits, and task contracts; this is an intentional MVP safety
-boundary rather than a general coding-agent service.
+The legacy calculator quote remains AUD 12.50 in sandbox mode. Immutable
+snapshot quotes use the variable policy described below. Unsafe, contradictory,
+external-business-outcome, stale, and estimator-declined contracts remain
+ineligible.
 
 ### Task 2 implementation status
 
 The codebase now also contains snapshot-backed repository discovery, preflight,
 assessment, and variable quote services. New quote contracts use an immutable
-`repository_binding_id`; planning assessments can analyze broader repositories
-while executable quotes remain on the fixture allowlist. The policy is
-explicitly uncalibrated and separates customer-safe factors from internal
-worker, analysis, verification, retry/risk, payment, margin, and minimum-price
+`repository_binding_id`; safe bounded tasks against captured GitHub App
+repositories can become executable snapshot quotes. The policy is explicitly
+uncalibrated and separates customer-safe factors from internal worker,
+analysis, verification, retry/risk, payment, margin, and minimum-price
 underwriting.
 
 Only estimator `accept` and customer-visible `accept_with_conditions` decisions
@@ -198,8 +200,9 @@ shape; REST alone retains fixture URL/SHA compatibility.
 This code and `20260730151707_quote_repository_evidence.sql` pass a full
 isolated local Supabase Postgres 17 migration replay, transactional database
 assertions, and database lint. The migration is applied to production, with
-remote history and service-role Data API access verified. The new endpoints
-are not yet included in the live workflow claims above.
+remote history and service-role Data API access verified. Production snapshot
+capture uses a bounded GitHub archive stream rather than assuming the hosting
+runtime has a system `git` executable.
 
 ### Task 4 implementation status
 
@@ -232,12 +235,14 @@ CLI output includes execution/retry state, claim and failure counts, next retry
 time, and safe failure reason. A cron response is HTTP `207` with
 `partial: true` when downstream reconciliation only partially succeeds.
 
-Execution remains fail-closed to the single existing repository/SHA/task
-allowlist and its trusted verifier profile. The snapshot URL/SHA legacy quote
-shape remains compatible and advances through the prior Cursor Cloud lifecycle
-in the background; it is never claimed by the isolated runner. Verifier
-dispatch recovery discovers the task-keyed workflow run and fails closed rather
-than redispatching when identity cannot be established. Pinch
+Execution accepts estimator-approved, safety-checked tasks against immutable
+repository bindings. The snapshot URL/SHA legacy quote shape remains compatible
+and advances through the prior Cursor Cloud lifecycle in the background; it is
+never claimed by the isolated runner. Verification is scoped to the task's
+repository and base branch; a repository without the trusted
+`outcomes-verify.yml` workflow cannot verify or charge. Verifier dispatch
+recovery discovers the task-keyed workflow run and fails closed rather than
+redispatching when identity cannot be established. Pinch
 `reserved`/`submitting`/`unknown` payments reconcile and, only after a
 definitive no-replay result, resubmit with the same provider nonce. The payment
 reservation snapshots payer, source, amount, and currency; recovery never
@@ -266,11 +271,32 @@ memory. These are not generalized production sandbox guarantees; use
 when the hosting runtime cannot provide them. Cursor usage is persisted, but
 the current local SDK result does not expose authoritative provider cost, so
 `actual_cost_usd_micros` remains `null` rather than estimated. The Task 4
-migration is applied to production and its schema is queryable; no live Task 4
-run is claimed here. Only validated change/run evidence is durable; the local
-checkout is ephemeral and cannot resume an interrupted Cursor process. A
-durable external worker and globally fenced payment lease remain post-hackathon
-production hardening.
+migration is applied to production and its schema is queryable. Only validated
+change/run evidence is durable; the local checkout is ephemeral and cannot
+resume an interrupted Cursor process. A durable external worker and globally
+fenced payment lease remain post-hackathon production hardening.
+
+#### Live developer-flow verification — 31 July 2026
+
+The production API and local controlled worker completed the core flow against
+the private `outcomes-test-org/real-work` repository:
+
+- production CLI preflight captured the exact `main` SHA and reproduced the
+  existing deterministic manifest hash;
+- a bounded README task received a variable AUD 6.75 executable quote;
+- explicit contract-hash acceptance created one durable isolated execution;
+- the local reconciler claimed it once, Cursor completed the change, and the
+  GitHub App publisher opened
+  [draft PR #2](https://github.com/outcomes-test-org/real-work/pull/2);
+- the PR is pinned to the quoted base and changes only `README.md`; the worker
+  never received the GitHub installation credential.
+
+Verification and charging were intentionally not claimed as successful:
+`real-work` does not yet contain the trusted verifier workflow, so the task
+ended `verification_failed` with no payment row. The suggested
+`w-v-r/search-harness` pricing check also requires installing the Outcomes
+GitHub App on the `w-v-r` account; the current installation covers only
+`outcomes-test-org`.
 
 ## REST API
 
@@ -335,8 +361,8 @@ node packages/cli/dist/bin/outcomes.js run \
 
 Without a TTY on stdin, interactive approval is refused; `--yes` must accompany the exact
 `--contract-hash` from the quote response.
-This CLI has **not** been live-verified end-to-end against production execution
-in Task 3.
+The quote, acceptance, status, and PR-return path has been live-verified through
+the production API and a controlled local worker as documented above.
 
 ## Security and payment behavior
 

@@ -698,7 +698,8 @@ begin.
   canonical URL/SHA.
 - Port and harden the read-only repository scanner.
 - Replace `FIXTURE_MANIFEST` in quote analysis with the requested snapshot.
-- Keep execution eligibility allowlisted while analysis broadens.
+- Keep execution eligibility bound to immutable repository and safety evidence
+  while analysis broadens.
 
 Exit: two different SHAs or repositories produce different immutable manifests,
 and inaccessible, stale, oversized, or unsupported refs fail before quote
@@ -740,8 +741,8 @@ The snapshot-backed pricing slice is implemented locally:
 - quote, underwriting, accepted-task, replay, and contract-hash evidence now
   include binding, snapshot, manifest, repository/base, and policy identity;
 - non-binding assessments require caller-supplied normalized Linear issue
-  content hashes and support broader repository analysis while execution stays
-  allowlisted;
+  content hashes and support broader repository analysis; estimator-approved,
+  safety-checked tasks can become executable only against immutable bindings;
 - an uncalibrated variable policy separates customer-safe rationale from
   internal worker, analysis, verification, retry/risk, payment, margin, and
   commercial-minimum coverage;
@@ -775,7 +776,7 @@ verified PRs without customer polling driving progress.
 
 #### Task 4 execution connection status — 31 July 2026
 
-Implemented and migrated in production, but not yet live-verified:
+Implemented, migrated in production, and live-verified through PR publication:
 
 - binding-backed acceptance now commits one task and leaves progression to the
   shared server reconciler rather than launching Cursor inline;
@@ -801,17 +802,29 @@ Implemented and migrated in production, but not yet live-verified:
 - worker/PR success still cannot charge. The existing trusted verifier must pass
   before the exactly-once sandbox payment service is called.
 
-The execution policy deliberately remains restricted to the current fixture
-repository, SHA, task contract, and verifier profile. Generalized repository
-support, a second verifier profile, model-budget cancellation, authoritative
-Cursor provider-cost capture, and live capture-to-PR verification remain
-pending. The Task 4 migration is applied to the linked production project;
-remote history and service-role schema access were verified. Vercel is only a
-bounded hackathon runner (eight-minute child inside an 800-second route);
-`git`, child-process,
-temporary-storage, and memory availability must be live-verified or the
-local/external reconciler used. The full migration replay and transactional
-claim assertions pass on ephemeral Postgres 17.10.
+The production API captured the private `outcomes-test-org/real-work`
+repository, priced a bounded README task at AUD 6.75, accepted the exact
+contract, and returned
+[draft PR #2](https://github.com/outcomes-test-org/real-work/pull/2) after one
+local controlled worker claim. The PR is based on the quoted SHA, changes only
+`README.md`, and was published without exposing the installation credential to
+Cursor. Snapshot capture now streams a bounded GitHub archive and therefore
+does not require system Git in the Vercel route. Quote hashing normalizes
+equivalent UTC timestamp encodings so database timestamp projection cannot
+invalidate an accepted contract.
+
+Verification is now scoped to each task's repository and base branch. This
+`real-work` task ended `verification_failed` with no payment because that
+repository does not yet have the trusted `outcomes-verify.yml` workflow. A
+second verifier profile,
+model-budget cancellation, authoritative Cursor provider-cost capture, and a
+durable external worker remain pending. The Task 4 migration is applied to the
+linked production project; remote history and service-role schema access were
+verified. Vercel remains only a bounded hackathon runner (eight-minute child
+inside an 800-second route); child-process, temporary-storage, and memory
+availability must be live-verified or the local/external reconciler used. The
+full migration replay and transactional claim assertions pass on ephemeral
+Postgres 17.10.
 
 Rollout is intentionally narrow: deploy the new app, promptly apply the
 migration, then enable cron. Approved binding-backed tasks without runs are
@@ -973,13 +986,14 @@ and keep payment sandbox-only.
 ## Current implementation sequence
 
 Milestone 1, the repository snapshot foundation, Task 2 pricing, Task 3 CLI,
-and Task 4's local execution connection are implemented. The remaining
+and Task 4's capture-to-PR execution connection are implemented. The remaining
 sequence is:
 
-1. Independently review and apply the Task 4 migration, configure the cron, and
-   live-verify capture → quote → accept → isolated worker → draft PR.
-2. Publish the CLI and add remaining MCP capture/assessment adapters.
-3. Add a second trusted verifier profile and widen execution only with evidence.
+1. Add a trusted verifier workflow/profile to the second repository and
+   live-verify no-charge failure plus verified sandbox charging.
+2. Move isolated execution to a durable external runner rather than depending
+   on Vercel child-process/runtime capabilities.
+3. Publish the CLI and add remaining MCP capture/assessment adapters.
 4. Add structured classification and perform calibration runs before changing
    the explicitly uncalibrated commercial policy.
 
