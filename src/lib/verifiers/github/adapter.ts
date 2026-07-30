@@ -49,6 +49,24 @@ const wait = (milliseconds: number) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 export class GitHubActionsVerifierAdapter implements VerifierAdapter {
+  readonly #defaultBranch: string;
+  readonly #repositoryFullName: string;
+  readonly #verifierWorkflow: string;
+
+  constructor({
+    defaultBranch = FIXTURE_REPOSITORY.defaultBranch,
+    repositoryFullName = FIXTURE_REPOSITORY.fullName,
+    verifierWorkflow = FIXTURE_REPOSITORY.verifierWorkflow,
+  }: {
+    defaultBranch?: string;
+    repositoryFullName?: string;
+    verifierWorkflow?: string;
+  } = {}) {
+    this.#defaultBranch = defaultBranch;
+    this.#repositoryFullName = repositoryFullName;
+    this.#verifierWorkflow = verifierWorkflow;
+  }
+
   async recoverVerification({
     dispatchedAfter,
     taskId,
@@ -57,7 +75,7 @@ export class GitHubActionsVerifierAdapter implements VerifierAdapter {
     taskId: string;
   }): Promise<StartedVerification | null> {
     const response = await githubRequest(
-      `/repos/${FIXTURE_REPOSITORY.fullName}/actions/workflows/${FIXTURE_REPOSITORY.verifierWorkflow}/runs?event=workflow_dispatch&per_page=100`,
+      `/repos/${this.#repositoryFullName}/actions/workflows/${this.#verifierWorkflow}/runs?event=workflow_dispatch&per_page=100`,
     );
     const payload = (await response.json()) as {
       workflow_runs?: Array<{
@@ -102,7 +120,7 @@ export class GitHubActionsVerifierAdapter implements VerifierAdapter {
     const dispatchedAt = new Date().toISOString();
 
     await githubRequest(
-      `/repos/${FIXTURE_REPOSITORY.fullName}/actions/workflows/${FIXTURE_REPOSITORY.verifierWorkflow}/dispatches`,
+      `/repos/${this.#repositoryFullName}/actions/workflows/${this.#verifierWorkflow}/dispatches`,
       {
         body: JSON.stringify({
           inputs: {
@@ -110,7 +128,7 @@ export class GitHubActionsVerifierAdapter implements VerifierAdapter {
             result_ref: resultRef,
             task_id: taskId,
           },
-          ref: FIXTURE_REPOSITORY.defaultBranch,
+          ref: this.#defaultBranch,
         }),
         method: "POST",
       },
@@ -140,7 +158,7 @@ export class GitHubActionsVerifierAdapter implements VerifierAdapter {
     runId: number,
   ): Promise<RefreshedVerification> {
     const response = await githubRequest(
-      `/repos/${FIXTURE_REPOSITORY.fullName}/actions/runs/${runId}`,
+      `/repos/${this.#repositoryFullName}/actions/runs/${runId}`,
     );
     const run = (await response.json()) as {
       conclusion: string | null;

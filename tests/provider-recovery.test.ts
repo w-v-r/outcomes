@@ -233,14 +233,24 @@ describe("GitHub verifier dispatch recovery", () => {
     );
 
     await expect(
-      new GitHubActionsVerifierAdapter().recoverVerification({
-        dispatchedAfter: "2026-07-31T00:00:00.000Z",
-        taskId: "task-1",
-      }),
+      new GitHubActionsVerifierAdapter({
+        defaultBranch: "trunk",
+        repositoryFullName: "acme/repo",
+        verifierWorkflow: "verify.yml",
+      }).recoverVerification({
+          dispatchedAfter: "2026-07-31T00:00:00.000Z",
+          taskId: "task-1",
+        }),
     ).resolves.toEqual({
       runId: 77,
       url: "https://github.com/acme/repo/actions/runs/77",
     });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "/repos/acme/repo/actions/workflows/verify.yml/runs",
+      ),
+      expect.any(Object),
+    );
   });
 
   test("fails closed on ambiguous duplicate verifier runs", async () => {

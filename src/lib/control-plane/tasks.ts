@@ -5,6 +5,7 @@ import {
   chargeVerifiedTask,
   type ChargeVerifiedTaskResult,
 } from "@/lib/billing/charge-verified-task";
+import { parseGitHubRepository } from "@/lib/repositories/github";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GitHubActionsVerifierAdapter } from "@/lib/verifiers/github/adapter";
 import { type VerifierAdapter } from "@/lib/verifiers/types";
@@ -26,6 +27,7 @@ type TaskRow = {
   idempotency_key: string;
   output_ref: string | null;
   quote_id: string;
+  repository_base_branch: string | null;
   repository_binding_id: string | null;
   repository_sha: string;
   repository_url: string;
@@ -65,7 +67,7 @@ type TaskLifecycleDependencies = {
 };
 
 const TASK_SELECT =
-  "id, user_id, quote_id, status, repository_url, repository_sha, repository_binding_id, task_spec, idempotency_key, agent_id, run_id, worker_provider, worker_runtime, worker_model, result_branch, result_pr_url, output_ref, usage, actual_cost_usd_micros, worker_result, verifier_run_id, verifier_status, verifier_conclusion, verifier_evidence, verifier_lease_expires_at, started_at, worker_completed_at, verifying_at, verified_at, completed_at, failed_at, failure_reason, created_at, updated_at";
+  "id, user_id, quote_id, status, repository_url, repository_sha, repository_base_branch, repository_binding_id, task_spec, idempotency_key, agent_id, run_id, worker_provider, worker_runtime, worker_model, result_branch, result_pr_url, output_ref, usage, actual_cost_usd_micros, worker_result, verifier_run_id, verifier_status, verifier_conclusion, verifier_evidence, verifier_lease_expires_at, started_at, worker_completed_at, verifying_at, verified_at, completed_at, failed_at, failure_reason, created_at, updated_at";
 
 const requireAdminClient = () => {
   const supabase = createAdminClient();
@@ -734,10 +736,16 @@ export const reconcileTaskLifecycle = async (
 ) => {
   const worker =
     dependencies.worker ?? new CursorCloudWorkerAdapter();
-  const verifier =
-    dependencies.verifier ?? new GitHubActionsVerifierAdapter();
   const chargeTask = dependencies.chargeTask ?? chargeVerifiedTask;
   let task = await loadOwnedTask(principal.userId, taskId);
+  const repository = parseGitHubRepository(task.repository_url);
+  const verifier =
+    dependencies.verifier ??
+    new GitHubActionsVerifierAdapter({
+      defaultBranch: task.repository_base_branch ?? "main",
+      repositoryFullName:
+        repository?.fullName ?? "invalid/invalid",
+    });
 
   task = await startLegacyWorker(task, worker);
   task = await recoverStaleStartup(task, worker);
