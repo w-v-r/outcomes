@@ -724,9 +724,9 @@ The minimal repository-binding and snapshot foundation is implemented:
 The migration replays successfully on an isolated local Supabase Postgres 17
 stack. Transactional database assertions verified installation generations,
 cross-owner rejection, binding ownership, immutable updates, grants, and RLS.
-The migration remains unapplied to the linked production project until it can
-be coordinated with deployment of the callback code that consumes the new
-claim RPC.
+The migration was applied to the linked production project on 31 July 2026.
+Remote migration history, the new tables, the active-installation filter, and
+service-role Data API access were verified after application.
 
 Still pending in the next pricing slice:
 

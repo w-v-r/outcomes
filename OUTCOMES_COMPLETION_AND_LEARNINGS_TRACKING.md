@@ -496,8 +496,7 @@ draft PR publication, and human-reviewed merge verified**.
 
 ## 31 July 2026 — Immutable repository binding and snapshot foundation
 
-Status: **implemented and locally verified; linked production migration not yet
-applied**.
+Status: **implemented, locally verified, and migrated in production**.
 
 ### Implemented
 
@@ -552,13 +551,14 @@ applied**.
   - owner-only snapshot visibility through RLS.
 - `supabase db push --dry-run --linked` identifies only
   `20260730141502_repository_bindings_and_snapshots.sql`.
+- Applied that migration to the linked production project with the Supabase
+  CLI and confirmed matching local/remote migration history.
+- Service-role Data API queries verified one active GitHub App installation
+  and empty initial `repository_snapshots` and `repository_bindings` tables.
 
 ### Scope boundary and next action
 
 - Quote creation still uses the pinned calculator fixture and
   `FIXTURE_MANIFEST`; pricing expansion is the next slice.
 - The new capture service is not yet exposed as a REST, MCP, or CLI operation.
-- The linked production migration must be coordinated with deployment because
-  the new callback uses `claim_github_app_installation` and active-installation
-  reads use `disconnected_at`.
 
