@@ -23,7 +23,7 @@
     "pretypecheck": "npm run build:packages",
     "cursor:repository:smoke": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/smoke-cursor-repository-access.ts",
     "github-app:worker:smoke": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/smoke-github-app-worker.ts",
-    "tasks:reconcile": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/reconcile-task-executions.ts",
+    "tasks:reconcile": "node --conditions=react-server --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/reconcile-task-executions.ts",
     "pinch:webhook:configure": "node scripts/configure-pinch-webhook.mjs",
     "pinch:webhook:test": "node scripts/test-pinch-webhook.mjs",
     "payments:mock-worker": "node scripts/run-mock-worker-payment.mjs"
@@ -45,6 +45,8 @@
     "next": "^16.2.11",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "server-only": "^0.0.1",
+    "tar": "^7.5.22",
     "zod": "^3.25.76"
   },
   "devDependencies": {

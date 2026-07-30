@@ -8,8 +8,10 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { create as createTarArchive } from "tar";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { createReadOnlyGitHubArchiveWorkspace } from "@/lib/repositories/archive-workspace";
 import {
   DeterministicRepositorySnapshotConflictError,
   createRepositoryCaptureService,
@@ -25,6 +27,7 @@ import {
   repositoryBindingSchema,
   repositorySnapshotSchema,
 } from "@/lib/repositories/domain";
+import { parseGitHubRepository } from "@/lib/repositories/github";
 import { sha256CanonicalJson } from "@/lib/repositories/hash";
 import {
   REPOSITORY_SCANNER_ID,
@@ -211,6 +214,60 @@ describe("repository contracts and hashing", () => {
         manifestHash: "b".repeat(64),
       }),
     ).toThrow(DeterministicRepositorySnapshotConflictError);
+  });
+});
+
+describe("GitHub archive workspace", () => {
+  test("extracts a pinned repository archive without system Git", async () => {
+    const archiveFixture = await createRepositoryDirectory();
+    const archiveRoot = path.join(archiveFixture, "repository-root");
+    const archivePath = path.join(archiveFixture, "repository.tar.gz");
+    await mkdir(path.join(archiveRoot, "src"), { recursive: true });
+    await writeFile(
+      path.join(archiveRoot, "src", "index.ts"),
+      "export const value = 1;\n",
+    );
+    await createTarArchive(
+      {
+        cwd: archiveFixture,
+        file: archivePath,
+        gzip: true,
+      },
+      ["repository-root"],
+    );
+    const archive = await readFile(archivePath);
+    const fetchImplementation = vi.fn(async () =>
+      new Response(archive, { status: 200 }),
+    );
+    const repository = parseGitHubRepository(REPOSITORY_URL);
+
+    expect(repository).not.toBeNull();
+
+    const workspace = await createReadOnlyGitHubArchiveWorkspace({
+      baseSha: COMMIT_SHA,
+      fetchImplementation,
+      installationToken: "installation-token",
+      repository: repository!,
+    });
+    temporaryDirectories.push(workspace.rootDirectory);
+
+    expect(
+      await readFile(
+        path.join(workspace.workspaceDirectory, "src", "index.ts"),
+        "utf8",
+      ),
+    ).toBe("export const value = 1;\n");
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      `https://api.github.com/repos/acme/example/tarball/${COMMIT_SHA}`,
+      expect.objectContaining({
+        redirect: "follow",
+      }),
+    );
+
+    await workspace.cleanup();
+    await expect(
+      readFile(path.join(workspace.workspaceDirectory, "src", "index.ts")),
+    ).rejects.toThrow();
   });
 });
 

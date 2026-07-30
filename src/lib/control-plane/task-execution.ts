@@ -3,7 +3,7 @@ import "server-only";
 import { type TaskContract, taskContractSchema } from "@outcomes/contracts";
 
 import { createContractHash } from "@/lib/pricing/quote-policy";
-import { decideTaskEligibility } from "@/lib/pricing/eligibility";
+import { decideSnapshotTaskEligibility } from "@/lib/pricing/eligibility";
 import { SNAPSHOT_PRICING_POLICY } from "@/lib/pricing/snapshot-policy";
 import { createPublicationBranch } from "@/lib/github-app/publisher";
 import {
@@ -732,7 +732,7 @@ const assertAcceptedEvidence = (
     );
   }
 
-  const currentEligibility = decideTaskEligibility({
+  const currentEligibility = decideSnapshotTaskEligibility({
     repositorySha: task.repositorySha,
     repositoryUrl: task.repositoryUrl,
     task: task.taskSpec,

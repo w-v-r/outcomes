@@ -6,6 +6,7 @@ import {
   ZERO_DIVISION_TASK_CONTRACT,
   normalizeGitHubRepositoryUrl,
 } from "./registry";
+import { assessTaskSafety } from "./task-safety";
 
 export type EligibilityDecision =
   | {
@@ -25,6 +26,24 @@ export type EligibilityDecision =
       reason: string;
     };
 
+export type SnapshotEligibilityDecision =
+  | {
+      code: "eligible";
+      eligible: true;
+      normalizedRepositoryUrl: string;
+    }
+  | {
+      code:
+        | "contradictory_task"
+        | "external_business_outcome"
+        | "repository_invalid"
+        | "repository_sha_invalid"
+        | "unsafe_task";
+      eligible: false;
+      normalizedRepositoryUrl: string | null;
+      reason: string;
+    };
+
 const normalizeText = (value: string) =>
   value
     .trim()
@@ -38,6 +57,54 @@ const normalizeList = (values: string[]) =>
 const listsMatch = (left: string[], right: string[]) =>
   JSON.stringify(normalizeList(left)) ===
   JSON.stringify(normalizeList(right));
+
+export const decideSnapshotTaskEligibility = ({
+  repositorySha,
+  repositoryUrl,
+  task,
+}: {
+  repositorySha: string;
+  repositoryUrl: string;
+  task: TaskContract;
+}): SnapshotEligibilityDecision => {
+  const normalizedRepositoryUrl =
+    normalizeGitHubRepositoryUrl(repositoryUrl);
+
+  if (!normalizedRepositoryUrl) {
+    return {
+      code: "repository_invalid",
+      eligible: false,
+      normalizedRepositoryUrl: null,
+      reason: "A canonical GitHub repository URL is required.",
+    };
+  }
+
+  if (!/^[0-9a-f]{40}$/u.test(repositorySha)) {
+    return {
+      code: "repository_sha_invalid",
+      eligible: false,
+      normalizedRepositoryUrl,
+      reason: "An immutable lowercase Git commit SHA is required.",
+    };
+  }
+
+  const safety = assessTaskSafety(task);
+
+  if (!safety.safe) {
+    return {
+      code: safety.code,
+      eligible: false,
+      normalizedRepositoryUrl,
+      reason: safety.reason,
+    };
+  }
+
+  return {
+    code: "eligible",
+    eligible: true,
+    normalizedRepositoryUrl,
+  };
+};
 
 export const decideTaskEligibility = ({
   repositorySha,

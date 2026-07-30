@@ -309,7 +309,7 @@ describe("snapshot-backed assessment and pricing", () => {
     );
   });
 
-  test("assesses a non-allowlisted repository but keeps execution closed", async () => {
+  test("assesses a safe task against an immutable non-fixture binding", async () => {
     const store = createMemoryAssessmentStore();
     const assessTask = createAssessTaskService({
       loadEvidence: async () => largeEvidence,
@@ -326,8 +326,8 @@ describe("snapshot-backed assessment and pricing", () => {
 
     expect(assessment.decision).not.toBe("decline");
     expect(assessment.execution_eligibility).toMatchObject({
-      code: "repository_not_allowed",
-      eligible: false,
+      code: "eligible",
+      eligible: true,
     });
     expect(assessment.accepted).toBe(false);
   });
@@ -646,7 +646,7 @@ describe("binding-backed executable quote contracts", () => {
     });
   });
 
-  test("rejects non-allowlisted bindings after pricing their stored snapshot", async () => {
+  test("quotes safe tasks against immutable non-fixture bindings", async () => {
     const store = createMemoryQuoteStore();
     const quoteTask = createSnapshotQuoteService({
       loadEvidence: async () => largeEvidence,
@@ -662,8 +662,8 @@ describe("binding-backed executable quote contracts", () => {
       },
     );
 
-    expect(quote.status).toBe("rejected");
-    expect(quote.eligibility.code).toBe("repository_not_allowed");
+    expect(quote.status).toBe("pending");
+    expect(quote.eligibility.code).toBe("eligible");
     expect(quote.repository.manifest_hash).toBe(
       largeEvidence.binding.manifestHash,
     );

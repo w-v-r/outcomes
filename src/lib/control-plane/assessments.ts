@@ -3,7 +3,7 @@ import "server-only";
 import { isDeepStrictEqual } from "node:util";
 
 import { type CustomerPrincipal } from "@/lib/api-keys/service";
-import { decideTaskEligibility } from "@/lib/pricing/eligibility";
+import { decideSnapshotTaskEligibility } from "@/lib/pricing/eligibility";
 import { estimateTaskCost } from "@/lib/pricing/estimator";
 import { HACKATHON_MODEL_RATE } from "@/lib/pricing/rate-card";
 import {
@@ -264,7 +264,7 @@ export const evaluateSnapshotTask = async ({
     task: taskRequest,
   });
   const safety = assessTaskSafety(task);
-  const executionEligibility = decideTaskEligibility({
+  const executionEligibility = decideSnapshotTaskEligibility({
     repositorySha: evidence.binding.baseSha,
     repositoryUrl: evidence.binding.repository.canonicalUrl,
     task,

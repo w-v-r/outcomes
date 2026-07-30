@@ -12,6 +12,10 @@ import {
 } from "@/lib/github-app/client";
 import { getGitHubAppConfig } from "@/lib/github-app/config";
 import {
+  createReadOnlyGitHubArchiveWorkspace,
+  type ReadOnlyRepositoryWorkspace,
+} from "@/lib/repositories/archive-workspace";
+import {
   REPOSITORY_BINDING_SCHEMA_VERSION,
   REPOSITORY_SNAPSHOT_SCHEMA_VERSION,
   assertRepositoryBindingMatchesSnapshot,
@@ -31,10 +35,6 @@ import {
   REPOSITORY_SCANNER_VERSION,
   scanRepository,
 } from "@/lib/repositories/scanner";
-import {
-  createIsolatedGitHubWorkspace,
-  type IsolatedWorkspace,
-} from "@/lib/workers/isolated/workspace";
 
 const repositoryCaptureInputSchema = z
   .object({
@@ -86,7 +86,7 @@ type RepositoryCaptureDependencies = {
     baseSha: string;
     installationToken: string;
     repository: GitHubRepository;
-  }) => Promise<IsolatedWorkspace>;
+  }) => Promise<ReadOnlyRepositoryWorkspace>;
   scanner: {
     id: string;
     scan: typeof scanRepository;
@@ -496,7 +496,7 @@ export const createRepositoryCaptureService = (
     let scanClient:
       | Pick<GitHubInstallationClient, "request" | "revokeToken">
       | undefined;
-    let workspace: IsolatedWorkspace | undefined;
+    let workspace: ReadOnlyRepositoryWorkspace | undefined;
     let operationFailed = false;
     let operationError: unknown;
 
@@ -699,7 +699,7 @@ export const captureRepositoryPreflight = async (
     createId: randomUUID,
     createInstallationClient: (token) =>
       new GitHubInstallationClient({ token }),
-    createWorkspace: createIsolatedGitHubWorkspace,
+    createWorkspace: createReadOnlyGitHubArchiveWorkspace,
     scanner: {
       id: REPOSITORY_SCANNER_ID,
       scan: scanRepository,
