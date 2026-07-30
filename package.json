@@ -9,6 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "cursor:repository:smoke": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/smoke-cursor-repository-access.ts",
+    "github-app:worker:smoke": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/smoke-github-app-worker.ts",
     "pinch:webhook:configure": "node scripts/configure-pinch-webhook.mjs",
     "pinch:webhook:test": "node scripts/test-pinch-webhook.mjs",
     "payments:mock-worker": "node scripts/run-mock-worker-payment.mjs"
@@ -40,6 +42,7 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.11",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.1",
     "typescript": "^6.0.3",
     "vitest": "^3.2.7"
   }

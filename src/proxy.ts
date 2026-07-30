@@ -10,5 +10,6 @@ export const config = {
     "/billing/:path*",
     "/dashboard/:path*",
     "/auth/:path*",
+    "/api/github/:path*",
   ],
 };

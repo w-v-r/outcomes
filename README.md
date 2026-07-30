@@ -219,6 +219,7 @@ Requirements:
 - Pinch sandbox credentials
 - An Outcomes-owned Cursor API key
 - A GitHub token with Actions access
+- An Outcomes GitHub App for private-repository execution
 
 Install and verify:
 
@@ -240,12 +241,98 @@ npm run dev
 
 See [.env.example](./.env.example) for required server variables. Never expose
 `SUPABASE_SECRET_KEY`, Pinch secrets, `CURSOR_API_KEY`, or
-`OUTCOMES_GITHUB_TOKEN` to the browser.
+GitHub tokens, app secrets, and private keys to the browser.
+
+### Outcomes GitHub App
+
+Register one GitHub App owned by Outcomes with:
+
+- Callback URL: `<NEXT_PUBLIC_APP_URL>/api/github/callback`
+- Request user authorization during installation: enabled
+- Repository permissions:
+  - Contents: read and write
+  - Pull requests: read and write
+- Installation scope: any account, with customers encouraged to select only
+  the repositories they want Outcomes to use
+
+Do not configure a Setup URL when OAuth during installation is enabled. Set the
+six `OUTCOMES_GITHUB_APP_*` variables from [.env.example](./.env.example), then
+open the dashboard and select **Install GitHub App**. The callback verifies the
+installation against the authorizing GitHub user before persisting it; the
+untrusted `installation_id` query parameter is never accepted on its own.
+
+The worker spike mints repository-scoped installation tokens for at most one
+hour and revokes each token after clone or publication. The local Cursor agent
+runs in a separate process with a fresh home directory, an explicit sandbox,
+no ambient settings, no Git metadata, and no GitHub credential. A publisher
+outside the agent validates the allowlisted diff, creates the commit and
+branch, opens the PR, and checks exact base/head ancestry and changed-file
+scope.
+
+Run the read-only repository and pinned-ref preflight first:
+
+```bash
+npm run github-app:worker:smoke -- \
+  --installation-id 12345678 \
+  --repository https://github.com/owner/repository \
+  --base main \
+  --sha 0123456789abcdef0123456789abcdef01234567
+```
+
+The guarded write spike also requires a reviewed prompt, one or more explicit
+publication paths, and an exact normalized repository confirmation:
+
+```bash
+npm run github-app:worker:smoke -- \
+  --installation-id 12345678 \
+  --repository https://github.com/owner/repository \
+  --base main \
+  --sha 0123456789abcdef0123456789abcdef01234567 \
+  --allow-path README.md \
+  --prompt-file ./path/to/reviewed-probe-prompt.txt \
+  --execute \
+  --confirm-write https://github.com/owner/repository
+```
+
+This spike does not create a quote, accept a task, widen repository eligibility,
+or call Pinch.
+
+### Cursor repository access smoke test
+
+Check whether the configured Cursor identity can see a repository without
+starting an agent:
+
+```bash
+npm run cursor:repository:smoke -- \
+  --repository https://github.com/owner/repository
+```
+
+The command exits with code `2` when GitHub is not connected or the repository
+is not in Cursor's connected-repository catalog. Catalog visibility does not
+prove clone, push, or PR permission. To exercise Cursor's write path, use a
+repository prepared for a harmless bounded change and opt into the write probe
+explicitly:
+
+```bash
+npm run cursor:repository:smoke -- \
+  --repository https://github.com/owner/repository \
+  --sha 0123456789abcdef0123456789abcdef01234567 \
+  --execute \
+  --confirm-write https://github.com/owner/repository \
+  --prompt-file ./path/to/reviewed-probe-prompt.txt
+```
+
+The write probe talks directly to Cursor Cloud. It does not create an Outcomes
+quote, accept a task, or call Pinch. Success requires a terminal Cursor run with
+both a result branch and a PR URL. Before treating the result as exact-SHA
+evidence, independently verify the PR base, head ancestry, and changed-file
+scope through GitHub.
 
 ## Project documentation
 
 - [Control-plane API](./CONTROL_PLANE_API.md)
 - [Implementation plan](./OUTCOMES_IMPLEMENTATION_PLAN.md)
+- [Developer workflow plan](./DEVELOPER_WORKFLOW_IMPLEMENTATION_PLAN.md)
 - [Completion and learnings](./OUTCOMES_COMPLETION_AND_LEARNINGS_TRACKING.md)
 - [Known issues](./known-bugs-to-fix.md)
 

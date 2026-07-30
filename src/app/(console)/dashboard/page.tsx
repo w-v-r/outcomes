@@ -5,7 +5,14 @@ import { SandboxPaymentDemo } from "@/components/billing/sandbox-payment-demo";
 import { ApiKeyManager } from "@/components/console/api-key-manager";
 import { listCustomerApiKeys } from "@/lib/api-keys/service";
 import { getAuthenticatedUser } from "@/lib/auth/get-authenticated-user";
+import { listGitHubInstallations } from "@/lib/github-app/installations";
 import { createClient } from "@/lib/supabase/server";
+
+type DashboardPageProps = {
+  searchParams: Promise<{
+    github_app?: string;
+  }>;
+};
 
 const getMcpEndpoint = () => {
   const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -21,15 +28,21 @@ const getMcpEndpoint = () => {
   return "http://localhost:3000/api/mcp";
 };
 
-const DashboardPage = async () => {
+const DashboardPage = async ({ searchParams }: DashboardPageProps) => {
   const user = await getAuthenticatedUser();
 
   if (!user) {
     redirect("/sign-in");
   }
 
+  const { github_app: githubAppResult } = await searchParams;
   const supabase = await createClient();
-  const [{ data: billingAccount }, { data: latestTask }, apiKeys] = await Promise.all([
+  const [
+    { data: billingAccount },
+    { data: latestTask },
+    apiKeys,
+    githubInstallations,
+  ] = await Promise.all([
     supabase
       .from("billing_accounts")
       .select("id, provider_payer_id, status")
@@ -44,6 +57,7 @@ const DashboardPage = async () => {
       .limit(1)
       .maybeSingle(),
     listCustomerApiKeys(user.id).catch(() => []),
+    listGitHubInstallations(user.id).catch(() => []),
   ]);
 
   const [{ data: paymentSource }, { data: quote }, { data: payment }] =
@@ -195,6 +209,83 @@ const DashboardPage = async () => {
         </section>
 
         <ApiKeyManager apiKeys={apiKeys} mcpEndpoint={getMcpEndpoint()} />
+
+        <section
+          aria-labelledby="github-app-heading"
+          className="mt-16 border-t border-paper/15 pt-10"
+        >
+          <div className="flex flex-col justify-between gap-8 sm:flex-row sm:items-end">
+            <div>
+              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-cobalt">
+                Repository authorization
+              </p>
+              <h2
+                className="mt-4 text-3xl tracking-[-0.04em]"
+                id="github-app-heading"
+              >
+                Outcomes GitHub App
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-paper/45">
+                Grant Outcomes access only to repositories where it may inspect
+                a pinned revision and publish an approved pull request.
+              </p>
+            </div>
+            <Link
+              className="w-fit border border-cobalt px-5 py-3 font-mono text-[9px] uppercase tracking-[0.16em] text-cobalt transition-colors hover:bg-cobalt hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt"
+              href="/api/github/install"
+            >
+              {githubInstallations.length > 0
+                ? "Manage installation"
+                : "Install GitHub App"}
+            </Link>
+          </div>
+
+          {githubAppResult === "connected" ? (
+            <p
+              className="mt-6 border-l-2 border-cobalt pl-4 text-sm text-paper/65"
+              role="status"
+            >
+              GitHub installation verified and connected.
+            </p>
+          ) : null}
+          {githubAppResult === "error" ? (
+            <p
+              className="mt-6 border-l-2 border-red-400 pl-4 text-sm text-red-300"
+              role="alert"
+            >
+              GitHub did not return a verifiable installation. Try again or
+              review the app permissions.
+            </p>
+          ) : null}
+
+          <div className="mt-8 grid gap-px bg-paper/15">
+            {githubInstallations.length === 0 ? (
+              <p className="bg-ink px-5 py-6 text-sm text-paper/40">
+                No GitHub account or organization is connected.
+              </p>
+            ) : (
+              githubInstallations.map((installation) => (
+                <div
+                  className="flex flex-col justify-between gap-3 bg-ink px-5 py-5 sm:flex-row sm:items-center"
+                  key={installation.installationId}
+                >
+                  <div>
+                    <p className="text-base text-paper/80">
+                      {installation.accountLogin}
+                    </p>
+                    <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.16em] text-paper/35">
+                      {installation.accountType} /{" "}
+                      {installation.repositorySelection} repositories
+                    </p>
+                  </div>
+                  <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-cobalt">
+                    {installation.suspendedAt ? "Suspended" : "Connected"}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
 
         <div className="mt-12 flex flex-col justify-between gap-6 border-t border-paper/15 pt-6 text-sm text-paper/40 sm:flex-row sm:items-center">
           <p>

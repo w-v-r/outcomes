@@ -313,3 +313,184 @@ already accepted contract.
 - GitHub workflow-file writes require a distinct OAuth `workflow` scope even
   when the token has full private-repository access.
 
+## 30 July 2026 — Developer workflow Milestone 1 access spike
+
+Status: **preflight and no-charge probe implemented; cross-account PR proof
+blocked on a connected second-owner repository**.
+
+### Implemented
+
+- Extracted GitHub repository URL normalization into a shared repository
+  boundary while preserving the pricing registry's existing public export.
+- Added an injectable Cursor repository-access service that distinguishes:
+  - connected repositories;
+  - valid but unconnected repositories;
+  - a missing GitHub integration;
+  - authentication failure;
+  - retryable or terminal catalog failure.
+- Added `cursor:repository:smoke`, which loads local development environment
+  files and performs a read-only Cursor identity/catalog preflight by default.
+- Added an explicit write-probe mode that:
+  - requires a full repository SHA;
+  - requires the normalized repository URL as a confirmation value;
+  - requires a reviewed prompt file;
+  - starts Cursor Cloud at the exact SHA with `autoCreatePR`;
+  - waits for completion and requires both a result branch and PR URL;
+  - calls neither the Outcomes quote/task path nor Pinch.
+- Added stable non-zero exits for unconnected repositories and failed write
+  probes.
+
+### Directly observed verification
+
+- All 13 unit tests pass, including pricing, worker, URL-normalization, and
+  repository-access coverage.
+- ESLint, TypeScript, IDE diagnostics, and the Next.js production build pass.
+- The configured Cursor API key reports a user identity named `wvr-test-key`
+  and 23 connected repositories.
+- The pinned benchmark fixture preflight returns `connected`.
+- `justinleeirizarry/aria51` returns `not_connected` with exit code `2`,
+  proving that a public GitHub URL is not treated as writable merely because it
+  can be cloned anonymously.
+- No Cursor write run, Outcomes quote/task, or Pinch payment was created during
+  these checks.
+
+### Authorization findings and evidence limits
+
+- `wvr-test-key` is a personal Cursor user key. It is not the production
+  service identity previously assumed by the implementation plan.
+- Cursor catalog visibility proves only that a repository is connected to that
+  Cursor identity. It cannot prove exact-ref clone, write permission, branch
+  protection compatibility, PR base, or eventual PR identity.
+- The existing fixture PR proves that one prior personal-key run could create a
+  branch and PR. It predates the currently pinned fixture SHA and therefore
+  does not prove that today's exact `startingRef` is honored.
+- The implemented write probe passes the full SHA to Cursor and requires a
+  returned branch and PR URL, but it does not yet independently verify Git
+  ancestry or changed-file scope through GitHub.
+- A Cursor service-account key can use repositories authorized for its own
+  Cursor team; it cannot inherit installations from unrelated customer Cursor
+  teams. Cursor does not document a delegated SaaS OAuth flow for Cloud Agent
+  launches.
+- Customer BYOK is a viable hackathon fallback, but Cursor usage is then billed
+  to the customer's Cursor account and cannot be represented as included in an
+  Outcomes fixed worker price.
+- The recommended product path is an Outcomes GitHub App plus an isolated
+  ephemeral local-SDK worker. A deterministic publisher outside the agent uses
+  short-lived installation credentials to commit, push, and open the PR.
+
+### GitHub App cross-account proof
+
+- Registered and deployed the Outcomes GitHub App, then installed it on
+  `outcomes-test-org` with access limited to the private `real-work`
+  repository.
+- Initialized the empty repository with a minimal README at pinned SHA
+  `6f3c98f13bea5c8de880c2d73c94905ec4635cae`.
+- The read-only preflight verified the private repository, `main` ref, pinned
+  commit, and non-stale base through installation `150090389`.
+- The isolated worker completed with run
+  `run-0b9580ca-9d82-4bee-9f39-0d95221b7bdd`, changed only `README.md`, and
+  received no GitHub installation credential.
+- The deterministic publisher created commit
+  `131fe34bb70d0e5bff5c9d72478e1d053ce4191b` and opened draft PR
+  https://github.com/outcomes-test-org/real-work/pull/1 through
+  `outcomes-worker[bot]`.
+- Independent GitHub inspection confirmed the draft PR targets `main`, uses
+  branch `outcomes/spike-3e1f0f5e5dbb`, and contains one file with six
+  additions and no deletions.
+- The reviewer promoted and merged the PR. GitHub reports merge commit
+  `dc6c8d57552e59778097ae14ae1e1f4548be19b3`.
+
+### Remaining Milestone 1 work
+
+- Independently review and harden the local SDK sandbox boundary.
+- Decide whether customer BYOK remains available as a separately billed
+  hackathon fallback.
+
+The GitHub App write path is now proven against one second-owner private
+repository. This is evidence for the bounded path, not yet a claim that every
+repository policy or task shape is supported.
+
+## 30 July 2026 — GitHub App and isolated-worker implementation
+
+Status: **live second-owner private-repository installation, isolated execution,
+draft PR publication, and human-reviewed merge verified**.
+
+### Implemented
+
+- Added an authenticated install redirect and OAuth callback for one
+  Outcomes-owned GitHub App.
+- Signed install state to the current Outcomes user and a short expiry.
+- Exchange the one-time GitHub OAuth code, list installations available to that
+  GitHub user, and accept the returned installation only when app ID, app slug,
+  and installation ID all match.
+- Added `github_app_installations` with account ownership, unique app/account
+  binding, RLS, authenticated read-only access, and service-role writes.
+- Applied migration `20260730122535_github_app_installations.sql` to the linked
+  Supabase project and queried the new table successfully.
+- Added repository-scoped installation-token creation for only `contents:
+  write` and `pull_requests: write`, with token revocation after clone and after
+  publication.
+- Added exact-SHA ephemeral checkout creation through `GIT_ASKPASS`; the token
+  is present only in the clone process environment and is never written to the
+  checkout or remote configuration.
+- Moved Git metadata outside the agent workspace before execution.
+- Added a separate local Cursor SDK child process with:
+  - the Cursor key supplied through consumed standard input rather than the
+    environment;
+  - a minimal environment and fresh home directory;
+  - no user, project, team, MDM, or plugin settings;
+  - SDK sandboxing enabled;
+  - no GitHub App private key, installation token, Git remote, or Git metadata.
+- Added strict publication validation for allowlisted paths, regular text
+  files, Git modes, file count, per-file bytes, total bytes, conflicts, and
+  immutable baseline SHA.
+- Added deterministic GitHub publication outside the agent using blobs, trees,
+  one-parent commits, refs, and pull requests.
+- Added stale-base rejection before publication and post-creation checks for PR
+  base SHA, head SHA, branch, and exact changed-file set.
+- Added cleanup that closes a mismatched PR and deletes its branch on
+  verification failure.
+- Added `github-app:worker:smoke`, read-only by default and write-enabled only
+  with an exact repository confirmation, reviewed prompt file, pinned SHA, base
+  branch, and explicit allowed paths.
+- Added the dashboard installation control and documented registration,
+  environment, preflight, and guarded execution.
+
+### Directly observed verification
+
+- All 21 tests pass, including RSA app JWT verification, user/expiry-bound
+  installation state, GitHub-user installation verification, external Git
+  metadata, allowlisted diff enforcement, deterministic publication identity,
+  successful publication evidence, and stale-base fail-closed behavior.
+- ESLint, TypeScript, IDE diagnostics, and the Next.js production build pass;
+  both GitHub App routes are present in the build output.
+- Supabase dry-run identified only the intended installation migration.
+- The migration applied successfully to the linked project.
+- A service-role count query against `github_app_installations` succeeded and
+  returned zero rows, as expected before the first installation.
+- The new smoke command starts correctly and reports
+  `OUTCOMES_GITHUB_APP_ID is not configured` without starting an agent or
+  writing to GitHub.
+- Production GitHub App credentials were configured and used to complete the
+  authenticated callback for installation `150090389`.
+- Read-only preflight proved that private repository
+  `outcomes-test-org/real-work` was accessible at the exact, current `main`
+  SHA.
+- The guarded write spike finished in approximately 29 seconds. Cursor reported
+  68,192 total tokens: 45,990 input, 954 output, and 21,248 cache-read tokens.
+- Independent GitHub inspection verified PR
+  https://github.com/outcomes-test-org/real-work/pull/1, bot attribution,
+  base/head branches, commit SHA, the exact one-file change set, and subsequent
+  merge commit `dc6c8d57552e59778097ae14ae1e1f4548be19b3`.
+
+### Evidence limits and next action
+
+- The SDK sandbox plus child-process boundary is materially safer than running
+  the agent in the credentialed orchestrator, but it is not equivalent to a
+  hardened container, VM, seccomp profile, or separate operating-system user.
+- Token revocation ran after discovery, clone, initialization, and publication,
+  but a separate negative test should prove that a captured revoked token can
+  no longer access the repository.
+- Repeat the proof with an existing nontrivial repository and independent
+  sandbox review before claiming generalized private-repository execution.
+

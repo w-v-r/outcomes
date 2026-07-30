@@ -5,6 +5,7 @@ import {
   type RepositoryManifest,
   type TaskContract,
 } from "./domain";
+export { normalizeGitHubRepositoryUrl } from "@/lib/repositories/github";
 
 export const FIXTURE_REPOSITORY = {
   baselineSha: "4aff18a256039f727b54d3cc48b65e8e8eab7bb7",
@@ -105,35 +106,3 @@ export const FIXTURE_MANIFEST: RepositoryManifest =
       lines: 57,
     },
   });
-
-export const normalizeGitHubRepositoryUrl = (value: string): string | null => {
-  const trimmedValue = value.trim().replace(/\.git$/u, "");
-  const sshMatch = trimmedValue.match(
-    /^git@github\.com:([a-z0-9_.-]+\/[a-z0-9_.-]+)$/iu,
-  );
-
-  if (sshMatch?.[1]) {
-    return `https://github.com/${sshMatch[1].toLowerCase()}`;
-  }
-
-  try {
-    const url = new URL(trimmedValue);
-
-    if (url.hostname.toLowerCase() !== "github.com") {
-      return null;
-    }
-
-    const pathParts = url.pathname
-      .split("/")
-      .filter(Boolean)
-      .slice(0, 2);
-
-    if (pathParts.length !== 2) {
-      return null;
-    }
-
-    return `https://github.com/${pathParts.join("/").toLowerCase()}`;
-  } catch {
-    return null;
-  }
-};

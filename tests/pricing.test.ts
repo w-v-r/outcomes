@@ -13,7 +13,7 @@ import { analyzeTask } from "@/lib/pricing/task-analysis";
 import { deriveQuote } from "@/lib/pricing/quote-policy";
 
 describe("pricing kernel", () => {
-  test("normalizes supported GitHub URL forms", () => {
+  test("normalizes canonical GitHub URL forms and rejects page URLs", () => {
     expect(
       normalizeGitHubRepositoryUrl(
         "git@github.com:w-v-r/agent-cost-benchmark-fixture.git",
@@ -21,9 +21,14 @@ describe("pricing kernel", () => {
     ).toBe(FIXTURE_REPOSITORY.url);
     expect(
       normalizeGitHubRepositoryUrl(
-        `${FIXTURE_REPOSITORY.url}/tree/main`,
+        `${FIXTURE_REPOSITORY.url}/`,
       ),
     ).toBe(FIXTURE_REPOSITORY.url);
+    expect(
+      normalizeGitHubRepositoryUrl(
+        `${FIXTURE_REPOSITORY.url}/tree/main`,
+      ),
+    ).toBeNull();
     expect(normalizeGitHubRepositoryUrl("https://example.com/repo")).toBeNull();
   });
 
