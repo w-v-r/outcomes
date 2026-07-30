@@ -43,10 +43,16 @@ export const createContractHash = (contract: {
   repositoryUrl: string;
   task: TaskContract;
   terms: string;
-}) =>
-  createHash("sha256")
-    .update(JSON.stringify(canonicalize(contract)))
+}) => {
+  const normalizedContract = {
+    ...contract,
+    expiresAt: new Date(contract.expiresAt).toISOString(),
+  };
+
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalize(normalizedContract)))
     .digest("hex");
+};
 
 export const deriveQuote = ({
   analysis,

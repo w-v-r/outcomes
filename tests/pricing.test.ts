@@ -10,9 +10,32 @@ import {
   normalizeGitHubRepositoryUrl,
 } from "@/lib/pricing/registry";
 import { analyzeTask } from "@/lib/pricing/task-analysis";
-import { deriveQuote } from "@/lib/pricing/quote-policy";
+import {
+  createContractHash,
+  deriveQuote,
+} from "@/lib/pricing/quote-policy";
 
 describe("pricing kernel", () => {
+  test("normalizes equivalent timestamp encodings in contract hashes", () => {
+    const contract = {
+      amountCents: 675,
+      currency: "AUD" as const,
+      expiresAt: "2026-07-30T18:57:34.553Z",
+      pricingModelVersion: "snapshot-variable-pricing:2.0.0",
+      repositorySha: FIXTURE_REPOSITORY.baselineSha,
+      repositoryUrl: FIXTURE_REPOSITORY.url,
+      task: ZERO_DIVISION_TASK_CONTRACT,
+      terms: "Immutable snapshot terms.",
+    };
+
+    expect(createContractHash(contract)).toBe(
+      createContractHash({
+        ...contract,
+        expiresAt: "2026-07-30T18:57:34.553+00:00",
+      }),
+    );
+  });
+
   test("normalizes canonical GitHub URL forms and rejects page URLs", () => {
     expect(
       normalizeGitHubRepositoryUrl(
