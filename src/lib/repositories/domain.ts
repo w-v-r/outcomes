@@ -8,35 +8,18 @@ import {
 } from "@/lib/pricing/domain";
 import { parseGitHubRepository } from "@/lib/repositories/github";
 import { sha256CanonicalJson } from "@/lib/repositories/hash";
+import {
+  githubBranchSchema,
+  githubShaSchema,
+  sha256Schema,
+} from "@outcomes/contracts";
+
+export { githubBranchSchema };
 
 export const REPOSITORY_BINDING_SCHEMA_VERSION = 1 as const;
 export const REPOSITORY_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 
-const githubShaSchema = z.string().regex(/^[0-9a-f]{40}$/u);
-const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/u);
 const positiveGitHubIdSchema = z.number().int().positive().safe();
-export const githubBranchSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(255)
-  .refine(
-    (branch) =>
-      branch !== "@" &&
-      !branch.startsWith("/") &&
-      !branch.endsWith("/") &&
-      !branch.endsWith(".") &&
-      !branch.includes("..") &&
-      !branch.includes("//") &&
-      !branch.includes("@{") &&
-      !branch.includes("[") &&
-      !branch.includes("]") &&
-      !branch.includes("\\") &&
-      !/(^|\/)\./u.test(branch) &&
-      !/(^|\/)[^/]*\.lock(\/|$)/u.test(branch) &&
-      !/[\u0000-\u001f\u007f ~^:?*]/u.test(branch),
-    "A valid GitHub base branch is required.",
-  );
 
 export const githubRepositoryIdentitySchema = z
   .object({

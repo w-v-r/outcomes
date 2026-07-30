@@ -793,6 +793,22 @@ made.
 
 ### Milestone 5 — Product CLI and MCP parity
 
+Task 3 (31 July 2026) landed the workspace packages and local CLI:
+
+- `@outcomes/contracts` — shared Zod request/response DTOs and exit-code semantics
+- `@outcomes/client` — typed REST client
+- `@outcomes/cli` — `outcomes` binary with auth, repo inspect, assess, quote,
+  accept, status/watch, and run commands
+
+Still pending before Milestone 5 exit:
+
+- npm publication and documented `npx @outcomes/cli` distribution
+- cross-adapter parity tests against hosted MCP in CI
+- live judge-ready end-to-end verification from a supported repository
+- MCP tools for repository capture and assessment (currently REST-only)
+
+Original checklist:
+
 - Introduce npm workspaces for `contracts`, typed `client`, and `cli` only.
 - Build the thin REST CLI with repo discovery, doctor/preflight, assessment,
   quote, accept, status, and run commands.

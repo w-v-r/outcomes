@@ -1,0 +1,37 @@
+{
+  "name": "@outcomes/client",
+  "version": "1.0.0",
+  "description": "Typed Outcomes REST client",
+  "type": "module",
+  "license": "ISC",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "prepack": "npm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@outcomes/contracts": "1.0.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "3.2.7"
+  }
+}

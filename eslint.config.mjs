@@ -9,5 +9,6 @@ export default defineConfig([
     ".next/**",
     "build-attempt-1/**",
     "next-env.d.ts",
+    "packages/**/dist/**",
   ]),
 ]);

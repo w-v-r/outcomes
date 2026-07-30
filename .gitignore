@@ -1,5 +1,11 @@
 # dependencies
 /node_modules
+/packages/*/node_modules/
+/**/node_modules/.vite/
+/packages/*/dist/
+/packages/*/.vitest/
+/packages/*/*.tgz
+/packages/cli/outcomes-cli-*.tgz
 
 # Next.js
 /.next/

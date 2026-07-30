@@ -3,9 +3,13 @@ import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  resolve: {
+    resolve: {
     alias: {
       "@": resolve(import.meta.dirname, "src"),
+      "@outcomes/contracts": resolve(
+        import.meta.dirname,
+        "packages/contracts/src/index.ts",
+      ),
       "server-only": resolve(
         import.meta.dirname,
         "tests/support/server-only.ts",
@@ -17,6 +21,9 @@ export default defineConfig({
       enabled: false,
     },
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    include: [
+      "tests/**/*.test.ts",
+      "packages/*/tests/**/*.test.ts",
+    ],
   },
 });

@@ -176,6 +176,15 @@ REST-only. MCP advertises only the required binding-backed quote schema; the
 legacy URL/SHA fixture shape is REST compatibility only. No future CLI should
 contain a local pricing implementation.
 
+## Outcomes CLI
+
+The `@outcomes/cli` workspace package (binary `outcomes`) is a thin REST adapter
+over the endpoints above. It performs local Git discovery and explicit approval
+UX only; repository capture, assessment, pricing, acceptance, execution, and
+status reconciliation remain on the server. Use `OUTCOMES_API_KEY` and optional
+`OUTCOMES_API_BASE_URL`. The package is built from this monorepo and is **not**
+claimed as a published npm release in Task 3.
+
 ## Server environment
 
 - `CURSOR_API_KEY`

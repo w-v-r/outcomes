@@ -622,3 +622,26 @@ and migrated in production**.
   executable verifier profiles, generalized worker prompts/task titles, and
   CLI/MCP assessment parity remain future work.
 
+## 31 July 2026 — Task 3 Outcomes CLI workspace
+
+Status: **implemented locally; not published; not live E2E verified**.
+
+- Added npm workspaces `@outcomes/contracts`, `@outcomes/client`, and
+  `@outcomes/cli` with shared REST DTOs, typed client, and the `outcomes` binary.
+- Refactored server request schemas to import from `@outcomes/contracts`.
+- CLI covers auth status, repo inspect, assess, quote, accept, status/watch, and
+  run with Git discovery, idempotency state, JSON output, and stable exit codes.
+- Package and root tests include HTTP fakes, git discovery fixtures, state
+  idempotency checks, and anti-drift guards against server kernel imports.
+- **Not claimed:** npm publication, production end-to-end quote/accept/run, or
+  MCP parity for capture/assessment.
+
+Task 4 blockers (remaining):
+
+- Publish `@outcomes/cli` and document supported `npx` usage against a released
+  version.
+- Live-verify capture → quote → accept → watch against production with a
+  supported repository and billing-ready account.
+- Add MCP adapters for capture/assessment or document REST-only agent playbooks.
+- Background reconciliation so tasks progress without continuous CLI polling.
+- Generalized execution/verification beyond the current allowlisted envelope.

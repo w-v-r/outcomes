@@ -1,0 +1,41 @@
+{
+  "name": "@outcomes/cli",
+  "version": "1.0.0",
+  "description": "Outcomes command-line interface for the hosted REST API",
+  "type": "module",
+  "license": "ISC",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "outcomes": "./dist/bin/outcomes.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist *.tgz",
+    "prepack": "npm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@outcomes/client": "1.0.0",
+    "@outcomes/contracts": "1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "6.0.3",
+    "vitest": "3.2.7"
+  }
+}

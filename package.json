@@ -1,14 +1,26 @@
 {
   "name": "outcomes",
   "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
+    "predev": "npm run build:packages",
     "build": "next build",
+    "prebuild": "npm run build:packages",
+    "build:packages": "npm run build -w @outcomes/contracts && npm run build -w @outcomes/client && npm run build -w @outcomes/cli",
+    "clean:packages": "npm run clean -w @outcomes/contracts && npm run clean -w @outcomes/client && npm run clean -w @outcomes/cli",
+    "smoke:cli-pack": "node scripts/smoke-cli-pack.mjs",
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
+    "pretest": "npm run build:packages",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "test:packages": "npm run build:packages && npm run test -w @outcomes/contracts && npm run test -w @outcomes/client && npm run test -w @outcomes/cli",
+    "typecheck": "tsc --noEmit && npm run typecheck -w @outcomes/contracts && npm run typecheck -w @outcomes/client && npm run typecheck -w @outcomes/cli",
+    "pretypecheck": "npm run build:packages",
     "cursor:repository:smoke": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/smoke-cursor-repository-access.ts",
     "github-app:worker:smoke": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/smoke-github-app-worker.ts",
     "pinch:webhook:configure": "node scripts/configure-pinch-webhook.mjs",
@@ -18,7 +30,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "private": true,
   "description": "Predictable prices for agent work",
   "engines": {
     "node": "24.x"
@@ -26,6 +37,7 @@
   "dependencies": {
     "@cursor/sdk": "^1.0.24",
     "@modelcontextprotocol/sdk": "^1.26.0",
+    "@outcomes/contracts": "1.0.0",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.8",
     "mcp-handler": "^1.1.0",

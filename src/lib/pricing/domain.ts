@@ -2,6 +2,10 @@ import "server-only";
 
 import { z } from "zod";
 
+import { taskContractSchema } from "@outcomes/contracts";
+
+export { taskContractSchema };
+
 export const PRICING_SCHEMA_VERSION = 1 as const;
 
 export const repositoryFileSchema = z.object({
@@ -64,17 +68,6 @@ export const repositoryManifestSchema = z.object({
     lines: z.number().int().nonnegative(),
   }),
 });
-
-export const taskContractSchema = z
-  .object({
-    acceptanceCriteria: z.array(z.string().trim().min(1).max(500)).min(1).max(8),
-    description: z.string().trim().min(1).max(1_500),
-    prohibitedChanges: z
-      .array(z.string().trim().min(1).max(500))
-      .min(1)
-      .max(8),
-  })
-  .strict();
 
 export const taskRequestSchema = taskContractSchema.extend({
   id: z.string().trim().min(1).max(120),

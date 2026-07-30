@@ -222,6 +222,49 @@ Authorization: Bearer outcomes_test_<prefix>_<secret>
 Request schemas, idempotency rules, and examples are documented in
 [CONTROL_PLANE_API.md](./CONTROL_PLANE_API.md).
 
+## Outcomes CLI (local workspace)
+
+The repository includes an `npx`-compatible TypeScript CLI package
+(`@outcomes/cli`, binary `outcomes`) that calls the hosted REST API only. It
+does not implement pricing, workers, or provider logic locally. The package is
+**not published to npm** in this repository state; use the local workspace
+commands below.
+
+```bash
+npm install
+npm run build:packages
+export OUTCOMES_API_KEY="outcomes_test_your_key"
+export OUTCOMES_API_BASE_URL="https://outcomes-chi.vercel.app"   # optional
+
+# Run from the repo without publishing:
+node packages/cli/dist/bin/outcomes.js auth status
+npm exec --workspace @outcomes/cli -- outcomes repo inspect
+
+# After a future npm publish (not available yet):
+# npx @outcomes/cli@latest auth status
+```
+
+Commands: `auth status`, `repo inspect`, `assess`, `quote`, `accept`, `status`,
+and `run`. Use `--json` for machine-readable stdout; diagnostics go to stderr.
+Non-interactive `run` requires `--yes` and `--contract-hash` matching the quote.
+
+Two-pass non-interactive flow:
+
+```bash
+QUOTE_JSON="$(node packages/cli/dist/bin/outcomes.js quote \
+  --task "Fix the bug" --acceptance "Tests pass" --prohibited "No unrelated edits" \
+  --json)"
+CONTRACT_HASH="$(node -e 'console.log(JSON.parse(process.argv[1]).quote.contract_hash)' "$QUOTE_JSON")"
+node packages/cli/dist/bin/outcomes.js run \
+  --task "Fix the bug" --acceptance "Tests pass" --prohibited "No unrelated edits" \
+  --yes --contract-hash "$CONTRACT_HASH" --json
+```
+
+Without a TTY on stdin, interactive approval is refused; `--yes` must accompany the exact
+`--contract-hash` from the quote response.
+This CLI has **not** been live-verified end-to-end against production execution
+in Task 3.
+
 ## Security and payment behavior
 
 - API-key secrets are shown once and persisted only as SHA-256 hashes.
