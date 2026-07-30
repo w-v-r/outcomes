@@ -180,7 +180,7 @@ export class GitHubAppClient {
     repositoryId,
   }: {
     installationId: number;
-    purpose: "clone" | "discover" | "publish";
+    purpose: "clone" | "discover" | "publish" | "scan";
     repository: GitHubRepository;
     repositoryId?: number;
   }): Promise<GitHubInstallationToken> {
@@ -191,7 +191,7 @@ export class GitHubAppClient {
         repositoryId <= 0)
     ) {
       throw new Error(
-        "A verified GitHub repository ID is required for clone and publication.",
+        "A verified GitHub repository ID is required for clone, scan, and publication.",
       );
     }
 
@@ -241,6 +241,43 @@ export class GitHubAppClient {
       expiresAt: payload.expires_at,
       token: payload.token,
     };
+  }
+
+  async getInstallation(
+    installationId: number,
+  ): Promise<GitHubInstallation> {
+    if (!Number.isSafeInteger(installationId) || installationId <= 0) {
+      throw new Error("A positive GitHub installation ID is required.");
+    }
+
+    const jwt = createGitHubAppJwt({
+      appId: this.#config.appId,
+      now: this.#now(),
+      privateKey: this.#config.privateKey,
+    });
+    const response = await this.#fetch(
+      `${GITHUB_API_URL}/app/installations/${installationId}`,
+      {
+        headers: githubHeaders(jwt),
+      },
+    );
+    const installation = await readJson<UserInstallationResponse>(
+      response,
+      "installation lookup",
+    );
+
+    if (
+      installation.id !== installationId ||
+      installation.app_id !== this.#config.appId ||
+      installation.app_slug.toLowerCase() !== this.#config.slug
+    ) {
+      throw new GitHubAppRequestError(
+        "GitHub returned an unexpected App installation.",
+        403,
+      );
+    }
+
+    return toInstallation(installation);
   }
 }
 

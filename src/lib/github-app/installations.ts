@@ -1,8 +1,12 @@
 import "server-only";
 
 import { type GitHubInstallation } from "@/lib/github-app/client";
+import { claimGitHubInstallation } from "@/lib/github-app/installation-claims";
+import { assertExecutionPermissions } from "@/lib/github-app/permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+
+export { assertExecutionPermissions } from "@/lib/github-app/permissions";
 
 export type StoredGitHubInstallation = {
   accountLogin: string;
@@ -10,23 +14,6 @@ export type StoredGitHubInstallation = {
   installationId: number;
   repositorySelection: "all" | "selected";
   suspendedAt: string | null;
-};
-
-export const assertExecutionPermissions = (
-  installation: GitHubInstallation,
-): void => {
-  if (
-    installation.permissions.contents !== "write" ||
-    installation.permissions.pull_requests !== "write"
-  ) {
-    throw new Error(
-      "The Outcomes GitHub App requires write access to repository contents and pull requests.",
-    );
-  }
-
-  if (installation.suspendedAt) {
-    throw new Error("The Outcomes GitHub App installation is suspended.");
-  }
 };
 
 export const saveGitHubInstallation = async ({
@@ -44,52 +31,11 @@ export const saveGitHubInstallation = async ({
     throw new Error("Supabase admin access is not configured.");
   }
 
-  const { data: existingInstallation, error: lookupError } = await admin
-    .from("github_app_installations")
-    .select("user_id")
-    .eq("app_id", installation.appId)
-    .eq("account_id", installation.accountId)
-    .maybeSingle();
-
-  if (lookupError) {
-    throw new Error(
-      `Unable to inspect the GitHub App installation: ${lookupError.message}`,
-    );
-  }
-
-  if (
-    existingInstallation &&
-    existingInstallation.user_id !== userId
-  ) {
-    throw new Error(
-      "This GitHub App installation is already connected to another Outcomes account.",
-    );
-  }
-
-  const { error } = await admin.from("github_app_installations").upsert(
-    {
-      account_id: installation.accountId,
-      account_login: installation.accountLogin,
-      account_type: installation.accountType,
-      app_id: installation.appId,
-      app_slug: installation.appSlug,
-      installation_id: installation.installationId,
-      permissions: installation.permissions,
-      repository_selection: installation.repositorySelection,
-      suspended_at: installation.suspendedAt,
-      updated_at: new Date().toISOString(),
-      user_id: userId,
-    },
-    {
-      onConflict: "app_id,account_id",
-    },
-  );
-
-  if (error) {
-    throw new Error(
-      `Unable to save the GitHub App installation: ${error.message}`,
-    );
-  }
+  await claimGitHubInstallation({
+    client: admin,
+    installation,
+    userId,
+  });
 };
 
 export const listGitHubInstallations = async (
@@ -102,6 +48,7 @@ export const listGitHubInstallations = async (
       "account_login, account_type, installation_id, repository_selection, suspended_at",
     )
     .eq("user_id", userId)
+    .is("disconnected_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {

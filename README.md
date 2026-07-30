@@ -269,6 +269,14 @@ outside the agent validates the allowlisted diff, creates the commit and
 branch, opens the PR, and checks exact base/head ancestry and changed-file
 scope.
 
+The repository capture foundation separately resolves a user-owned active
+installation, verifies the immutable GitHub repository ID and exact
+branch/commit/tree identity, scans an exact-SHA ephemeral checkout without
+executing repository code, and persists a deterministic manifest plus immutable
+repository binding. Snapshot and binding writes are service-only; authenticated
+users may read only their own records. This foundation is not yet wired into
+quote creation, which remains fixture-only.
+
 Run the read-only repository and pinned-ref preflight first:
 
 ```bash

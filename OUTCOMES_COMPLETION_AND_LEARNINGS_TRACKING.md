@@ -494,3 +494,71 @@ draft PR publication, and human-reviewed merge verified**.
 - Repeat the proof with an existing nontrivial repository and independent
   sandbox review before claiming generalized private-repository execution.
 
+## 31 July 2026 — Immutable repository binding and snapshot foundation
+
+Status: **implemented and locally verified; linked production migration not yet
+applied**.
+
+### Implemented
+
+- Added strict, versioned repository identity, snapshot, access-binding, and
+  repository-binding contracts.
+- Added deterministic canonical JSON and SHA-256 hashing. Snapshot parsing
+  rejects a manifest whose stored hash, repository, source ref, or commit does
+  not match.
+- Ported and hardened the read-only repository scanner with deterministic path
+  ordering, conservative file and byte limits, binary/generated/test
+  classification, and exclusions for dependencies, build output, Git metadata,
+  and symlinks.
+- Added GitHub App repository capture that:
+  - requires an active installation owned by the requesting Outcomes user;
+  - rechecks current GitHub installation identity, permissions, and suspension;
+  - verifies canonical repository name and immutable GitHub repository ID;
+  - rejects a base branch that no longer points to the requested SHA;
+  - verifies the exact commit and tree;
+  - uses a repository-ID-scoped, read-only scan token;
+  - clones the exact SHA into an ephemeral workspace;
+  - persists the snapshot before its binding;
+  - revokes tokens and removes the workspace on success or failure.
+- Added atomic, versioned installation claims. Reinstallation creates a new
+  active generation and disconnects the previous generation without rewriting
+  the installation identity referenced by historical bindings. Cross-account
+  ownership claims fail inside the transaction.
+- Added immutable `repository_snapshots` and `repository_bindings` tables with
+  semantic uniqueness, deterministic-conflict detection, composite
+  owner-matching foreign keys, indexed RLS predicates, authenticated
+  owner-only reads, and service-role-only inserts.
+
+### Verification
+
+- An independent review identified and prompted fixes for installation-claim
+  races, installation generation mutation, mismatched snapshot idempotency,
+  valid slash-containing branch names, hidden cleanup failures, and missing
+  database assertions.
+- All 49 tests pass, including deterministic hashing/scanning, strict contract
+  checks, stale-ref rejection, ownership rejection, cleanup aggregation,
+  installation claim arguments, and migration contract assertions.
+- ESLint, TypeScript, IDE diagnostics, the Next.js production build, and
+  `git diff --check` pass.
+- The complete migration chain replayed successfully on an isolated local
+  Supabase Postgres `17.6.1.147` database.
+- Transactional SQL assertions verified:
+  - one active installation generation after reinstall;
+  - rejection of a second Outcomes owner;
+  - rejection of cross-owner binding foreign keys;
+  - acceptance of `feature/foo` as a base branch;
+  - immutable snapshot updates;
+  - absence of authenticated insert and service-role update privileges;
+  - owner-only snapshot visibility through RLS.
+- `supabase db push --dry-run --linked` identifies only
+  `20260730141502_repository_bindings_and_snapshots.sql`.
+
+### Scope boundary and next action
+
+- Quote creation still uses the pinned calculator fixture and
+  `FIXTURE_MANIFEST`; pricing expansion is the next slice.
+- The new capture service is not yet exposed as a REST, MCP, or CLI operation.
+- The linked production migration must be coordinated with deployment because
+  the new callback uses `claim_github_app_installation` and active-installation
+  reads use `disconnected_at`.
+

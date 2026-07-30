@@ -704,6 +704,39 @@ Exit: two different SHAs or repositories produce different immutable manifests,
 and inaccessible, stale, oversized, or unsupported refs fail before quote
 creation.
 
+#### Repository foundation status — 31 July 2026
+
+The minimal repository-binding and snapshot foundation is implemented:
+
+- strict versioned `RepositoryBinding` and `RepositorySnapshot` contracts;
+- deterministic canonical JSON and SHA-256 manifest hashing;
+- a bounded, read-only scanner that excludes build outputs, dependencies, Git
+  metadata, and symlinks without executing repository code;
+- GitHub App preflight that verifies the current installation, immutable
+  repository ID, exact branch tip, commit, and tree before scanning;
+- repository-ID-scoped scan tokens, exact-SHA ephemeral checkout, revocation,
+  and cleanup;
+- immutable, user-owned snapshot and binding tables with composite ownership
+  foreign keys, RLS, explicit grants, and fail-closed snapshot idempotency;
+- atomic, versioned GitHub App installation claims so a reinstall cannot
+  rewrite the access identity referenced by an existing binding.
+
+The migration replays successfully on an isolated local Supabase Postgres 17
+stack. Transactional database assertions verified installation generations,
+cross-owner rejection, binding ownership, immutable updates, grants, and RLS.
+The migration remains unapplied to the linked production project until it can
+be coordinated with deployment of the callback code that consumes the new
+claim RPC.
+
+Still pending in the next pricing slice:
+
+- external-source/Linear binding;
+- loading the captured manifest in quote analysis instead of
+  `FIXTURE_MANIFEST`;
+- attaching the binding and manifest hash to quote underwriting and the
+  commercial contract;
+- broader analysis eligibility while execution remains allowlisted.
+
 ### Milestone 3 — Generalize narrow execution and verification
 
 - Replace the fixture worker prompt and fixed SQL task title.
@@ -845,29 +878,17 @@ create API key
 Test both verified success and no-charge failure. Use disposable branches/PRs
 and keep payment sandbox-only.
 
-## Immediate implementation slice
+## Current implementation sequence
 
-The first implementation slice is Milestone 1 plus the minimum test foundation
-from Milestone 0:
+Milestone 1 and the minimal repository-binding and snapshot foundation are
+implemented and verified. The remaining sequence is:
 
-1. Select a second repository whose write authorization differs from the
-   existing fixture.
-2. Register an Outcomes GitHub App and install it only on that repository.
-3. Prove short-lived-token clone at an exact SHA without exposing the token to
-   an agent.
-4. Run one bounded local SDK task in an isolated ephemeral worker using the
-   Outcomes Cursor credential.
-5. Publish the branch and PR outside the agent, then verify base/head ancestry,
-   changed-file scope, and installation attribution.
-6. Preserve the existing fixture lifecycle and avoid widening public quote
-   eligibility during the spike.
-7. Keep the implemented Cursor catalog/Cloud probe as a BYOK diagnostic, not
-   as evidence that an Outcomes-owned identity can access arbitrary customer
-   repositories.
-
-This resolves the highest-risk judge-flow assumption before investing in the
-CLI. Once it passes, the next coding slice is repository binding and immutable
-snapshots.
+1. Expand assessment and pricing against captured repository snapshots while
+   keeping execution eligibility allowlisted.
+2. Add CLI discovery and product polish over the same application services
+   used by REST and MCP.
+3. Connect quote acceptance to the isolated worker, deterministic publisher,
+   reconciliation, and verification path.
 
 ## Explicitly deferred from the first slice
 

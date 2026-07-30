@@ -26,6 +26,7 @@ import {
   GitHubInstallationClient,
   requireGitHubRepository,
 } from "@/lib/github-app/client";
+import { claimGitHubInstallation } from "@/lib/github-app/installation-claims";
 import {
   createPublicationBranch,
   publishGitHubPullRequest,
@@ -184,7 +185,7 @@ describe("GitHub App client", () => {
     });
   });
 
-  test("narrows clone and publication tokens to one repository and phase", async () => {
+  test("narrows clone, scan, and publication tokens to one repository and phase", async () => {
     const { privateKey } = generateKeyPairSync("rsa", {
       modulusLength: 2_048,
     });
@@ -231,6 +232,12 @@ describe("GitHub App client", () => {
     });
     await client.createInstallationToken({
       installationId: 987,
+      purpose: "scan",
+      repository,
+      repositoryId: 77,
+    });
+    await client.createInstallationToken({
+      installationId: 987,
       purpose: "publish",
       repository,
       repositoryId: 77,
@@ -257,12 +264,77 @@ describe("GitHub App client", () => {
         fetchImplementation.mock.calls[2]?.[1]?.body as string,
       ),
     ).toEqual({
+      permissions: { contents: "read" },
+      repository_ids: [77],
+    });
+    expect(
+      JSON.parse(
+        fetchImplementation.mock.calls[3]?.[1]?.body as string,
+      ),
+    ).toEqual({
       permissions: {
         contents: "write",
         pull_requests: "write",
       },
       repository_ids: [77],
     });
+  });
+});
+
+describe("GitHub App installation claims", () => {
+  const installation = {
+    accountId: 55,
+    accountLogin: "Acme",
+    accountType: "Organization",
+    appId: 123,
+    appSlug: "outcomes-test",
+    installationId: 987,
+    permissions: {
+      contents: "write",
+      pull_requests: "write",
+    },
+    repositorySelection: "selected" as const,
+    suspendedAt: null,
+  };
+
+  test("sends one atomic installation-generation claim RPC", async () => {
+    const rpc = vi.fn(async () => ({ error: null }));
+
+    await claimGitHubInstallation({
+      client: { rpc },
+      installation,
+      userId: "11111111-1111-4111-8111-111111111111",
+    });
+
+    expect(rpc).toHaveBeenCalledWith("claim_github_app_installation", {
+      p_account_id: 55,
+      p_account_login: "Acme",
+      p_account_type: "Organization",
+      p_app_id: 123,
+      p_app_slug: "outcomes-test",
+      p_installation_id: 987,
+      p_permissions: {
+        contents: "write",
+        pull_requests: "write",
+      },
+      p_repository_selection: "selected",
+      p_suspended_at: null,
+      p_user_id: "11111111-1111-4111-8111-111111111111",
+    });
+  });
+
+  test("surfaces claim RPC ownership failures", async () => {
+    const rpc = vi.fn(async () => ({
+      error: { message: "already connected to another Outcomes account" },
+    }));
+
+    await expect(
+      claimGitHubInstallation({
+        client: { rpc },
+        installation,
+        userId: "11111111-1111-4111-8111-111111111111",
+      }),
+    ).rejects.toThrow("already connected");
   });
 });
 
