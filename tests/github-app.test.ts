@@ -31,7 +31,10 @@ import {
   createPublicationBranch,
   publishGitHubPullRequest,
 } from "@/lib/github-app/publisher";
-import { createIsolatedWorkerEnvironment } from "@/lib/workers/isolated/process";
+import {
+  createIsolatedWorkerEnvironment,
+  executeIsolatedCursorProcess,
+} from "@/lib/workers/isolated/process";
 import { collectValidatedWorkspaceChanges } from "@/lib/workers/isolated/workspace-changes";
 
 const execFileAsync = promisify(execFile);
@@ -339,6 +342,30 @@ describe("GitHub App installation claims", () => {
 });
 
 describe("isolated workspace validation", () => {
+  test("does not launch a child for an already-aborted execution", async () => {
+    const rootDirectory = await mkdtemp(
+      path.join(os.tmpdir(), "outcomes-aborted-worker-"),
+    );
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      executeIsolatedCursorProcess({
+        apiKey: "cursor-test",
+        input: {
+          idempotencyKey: "aborted-worker",
+          modelId: "composer-2.5",
+          name: "aborted worker",
+          prompt: "Do nothing.",
+          workspaceDirectory: rootDirectory,
+        },
+        rootDirectory,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow("aborted before launch");
+    await rm(rootDirectory, { force: true, recursive: true });
+  });
+
   test("constructs a minimal worker environment without ambient credentials", () => {
     const environment = createIsolatedWorkerEnvironment({
       nodeEnvironment: "test",
@@ -563,8 +590,14 @@ describe("deterministic publication identity", () => {
       createPublicationBranch(input),
     );
     expect(createPublicationBranch(input)).toMatch(
-      /^outcomes\/spike-[0-9a-f]{12}$/u,
+      /^outcomes\/task-[0-9a-f]{12}$/u,
     );
+    expect(
+      createPublicationBranch({
+        ...input,
+        changes: [{ ...input.changes[0]!, mode: "100755" }],
+      }),
+    ).not.toBe(createPublicationBranch(input));
   });
 
   test("publishes only when the base and changed-file evidence match", async () => {
@@ -593,17 +626,18 @@ describe("deterministic publication identity", () => {
         },
         status: 200,
       },
+      { body: [], status: 200 },
       { body: { message: "Not Found" }, status: 404 },
       {
         body: { ref: "refs/heads/outcomes/spike-test" },
         status: 200,
       },
-      { body: [], status: 200 },
       {
         body: {
           base: { ref: "main", sha: baseSha },
           head: { ref: "outcomes/spike-test", sha: commitSha },
           html_url: "https://github.com/acme/private-repo/pull/7",
+          merged_at: null,
           number: 7,
           state: "open",
           user: { login: "outcomes-test[bot]" },
@@ -651,6 +685,7 @@ describe("deterministic publication identity", () => {
       changedFiles: ["README.md"],
       commitAuthor: "outcomes-test[bot]",
       commitSha,
+      deliveryStatus: "open",
       prAuthor: "outcomes-test[bot]",
       prNumber: 7,
       prUrl: "https://github.com/acme/private-repo/pull/7",
@@ -680,11 +715,14 @@ describe("deterministic publication identity", () => {
   });
 
   test("fails before publication if the protected base branch moved", async () => {
-    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
-      Response.json({
-        object: { sha: "c".repeat(40), type: "commit" },
-      }),
-    );
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          object: { sha: "c".repeat(40), type: "commit" },
+        }),
+      )
+      .mockResolvedValueOnce(Response.json([]));
     const client = new GitHubInstallationClient({
       fetchImplementation,
       token: "installation-secret",
@@ -712,10 +750,10 @@ describe("deterministic publication identity", () => {
         ),
       }),
     ).rejects.toThrow("base branch moved");
-    expect(fetchImplementation).toHaveBeenCalledTimes(1);
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
   });
 
-  test("reuses an exact deterministic branch and open pull request", async () => {
+  test("stops branch and PR publication when the lease fence is lost", async () => {
     const baseSha = "a".repeat(40);
     const commitSha = "b".repeat(40);
     const responses = [
@@ -732,18 +770,101 @@ describe("deterministic publication identity", () => {
         parents: [{ sha: baseSha }],
         sha: commitSha,
       },
-      { object: { sha: commitSha, type: "commit" } },
+    ];
+    const fetchImplementation = vi.fn<typeof fetch>(async () =>
+      Response.json(responses.shift() ?? { message: "Unexpected" }),
+    );
+    const client = new GitHubInstallationClient({
+      fetchImplementation,
+      token: "installation-secret",
+    });
+    let leaseChecks = 0;
+
+    await expect(
+      publishGitHubPullRequest({
+        assertLease: async () => {
+          leaseChecks += 1;
+
+          if (leaseChecks >= 6) {
+            throw new Error("lease lost");
+          }
+        },
+        baseBranch: "main",
+        baseSha,
+        branch: "outcomes/spike-test",
+        changes: [
+          {
+            contentBase64: Buffer.from("after\n").toString("base64"),
+            mode: "100644",
+            path: "README.md",
+            status: "modified",
+          },
+        ],
+        client,
+        commitMessage: "Bounded change",
+        pullRequestBody: "Evidence",
+        pullRequestTitle: "Outcomes change",
+        repository: requireGitHubRepository(
+          "https://github.com/acme/private-repo",
+        ),
+      }),
+    ).rejects.toThrow("lease lost");
+    expect(
+      fetchImplementation.mock.calls.some(([url, init]) => {
+        const requestUrl = String(url);
+        return (
+          init?.method === "POST" &&
+          (requestUrl.endsWith("/git/refs") ||
+            requestUrl.endsWith("/pulls"))
+        );
+      }),
+    ).toBe(false);
+  });
+
+  test("reuses an exact deterministic branch and closed pull request", async () => {
+    const baseSha = "a".repeat(40);
+    const commitSha = "b".repeat(40);
+    const responses = [
+      { object: { sha: baseSha, type: "commit" } },
+      {
+        committer: { date: "2026-07-30T00:00:00.000Z" },
+        sha: baseSha,
+        tree: { sha: "base-tree" },
+      },
+      { sha: "blob-sha" },
+      { sha: "result-tree", truncated: false },
+      {
+        committer: null,
+        parents: [{ sha: baseSha }],
+        sha: commitSha,
+      },
       [
         {
           base: { ref: "main", sha: baseSha },
           head: { ref: "outcomes/spike-test", sha: commitSha },
           html_url: "https://github.com/acme/private-repo/pull/7",
+          merged_at: null,
           number: 7,
-          state: "open",
+          state: "closed",
           user: { login: "outcomes-test[bot]" },
         },
       ],
+      {
+        committer: null,
+        parents: [{ sha: baseSha }],
+        sha: commitSha,
+      },
+      { object: { sha: commitSha, type: "commit" } },
       [{ filename: "README.md" }],
+      {
+        base: { ref: "main", sha: baseSha },
+        head: { ref: "outcomes/spike-test", sha: commitSha },
+        html_url: "https://github.com/acme/private-repo/pull/7",
+        merged_at: null,
+        number: 7,
+        state: "open",
+        user: { login: "outcomes-test[bot]" },
+      },
     ];
     const fetchImplementation = vi.fn<typeof fetch>(async () =>
       Response.json(responses.shift() ?? { message: "Unexpected" }),
@@ -776,6 +897,7 @@ describe("deterministic publication identity", () => {
       }),
     ).resolves.toMatchObject({
       commitSha,
+      deliveryStatus: "open",
       prNumber: 7,
     });
     expect(
@@ -788,5 +910,130 @@ describe("deterministic publication identity", () => {
         );
       }),
     ).toBe(false);
+    expect(
+      fetchImplementation.mock.calls.some(([url]) =>
+        String(url).includes("/pulls?state=all&"),
+      ),
+    ).toBe(true);
+    expect(
+      fetchImplementation.mock.calls.some(
+        ([url, init]) =>
+          String(url).endsWith("/pulls/7") && init?.method === "PATCH",
+      ),
+    ).toBe(true);
+  });
+
+  test("reuses a merged exact PR after the protected base moves", async () => {
+    const baseSha = "a".repeat(40);
+    const commitSha = "b".repeat(40);
+    const pullRequest = {
+      base: { ref: "main", sha: baseSha },
+      head: { ref: "outcomes/spike-test", sha: commitSha },
+      html_url: "https://github.com/acme/private-repo/pull/8",
+      merged_at: "2026-07-31T00:00:00.000Z",
+      number: 8,
+      state: "closed",
+      user: { login: "outcomes-test[bot]" },
+    };
+    const responses = [
+      { object: { sha: "c".repeat(40), type: "commit" } },
+      [pullRequest],
+      {
+        committer: { login: "outcomes-test[bot]" },
+        parents: [{ sha: baseSha }],
+        sha: commitSha,
+      },
+      { message: "Not Found" },
+      [{ filename: "README.md" }],
+    ];
+    const statuses = [200, 200, 200, 404, 200];
+    const fetchImplementation = vi.fn<typeof fetch>(async () =>
+      Response.json(responses.shift() ?? { message: "Unexpected" }, {
+        status: statuses.shift() ?? 500,
+      }),
+    );
+    const client = new GitHubInstallationClient({
+      fetchImplementation,
+      token: "installation-secret",
+    });
+
+    await expect(
+      publishGitHubPullRequest({
+        baseBranch: "main",
+        baseSha,
+        branch: "outcomes/spike-test",
+        changes: [
+          {
+            contentBase64: Buffer.from("after\n").toString("base64"),
+            mode: "100644",
+            path: "README.md",
+            status: "modified",
+          },
+        ],
+        client,
+        commitMessage: "Bounded change",
+        pullRequestBody: "Evidence",
+        pullRequestTitle: "Outcomes change",
+        repository: requireGitHubRepository(
+          "https://github.com/acme/private-repo",
+        ),
+      }),
+    ).resolves.toMatchObject({
+      commitSha,
+      deliveryStatus: "merged",
+      prNumber: 8,
+    });
+  });
+
+  test("fails closed when multiple PRs match deterministic recovery", async () => {
+    const baseSha = "a".repeat(40);
+    const exactPullRequest = {
+      base: { ref: "main", sha: baseSha },
+      head: { ref: "outcomes/spike-test", sha: "b".repeat(40) },
+      html_url: "https://github.com/acme/private-repo/pull/8",
+      merged_at: null,
+      state: "open",
+      user: { login: "outcomes-test[bot]" },
+    };
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          object: { sha: "c".repeat(40), type: "commit" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json([
+          { ...exactPullRequest, number: 8 },
+          { ...exactPullRequest, number: 9 },
+        ]),
+      );
+    const client = new GitHubInstallationClient({
+      fetchImplementation,
+      token: "installation-secret",
+    });
+
+    await expect(
+      publishGitHubPullRequest({
+        baseBranch: "main",
+        baseSha,
+        branch: "outcomes/spike-test",
+        changes: [
+          {
+            contentBase64: Buffer.from("after\n").toString("base64"),
+            mode: "100644",
+            path: "README.md",
+            status: "modified",
+          },
+        ],
+        client,
+        commitMessage: "Bounded change",
+        pullRequestBody: "Evidence",
+        pullRequestTitle: "Outcomes change",
+        repository: requireGitHubRepository(
+          "https://github.com/acme/private-repo",
+        ),
+      }),
+    ).rejects.toThrow("Multiple pull requests");
   });
 });

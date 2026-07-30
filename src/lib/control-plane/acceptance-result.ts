@@ -1,6 +1,7 @@
 import { ControlPlaneError } from "./errors";
 
 export type AcceptanceRpcResult = {
+  created?: boolean;
   status: string;
   task_id: string | null;
 };

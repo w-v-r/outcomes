@@ -54,6 +54,7 @@ export {
   customerLegacyQuoteSchema,
   customerQuoteSchema,
   customerSnapshotQuoteSchema,
+  customerTaskExecutionSchema,
   customerTaskSchema,
   getTaskResponseSchema,
   installationGenerationSchema,

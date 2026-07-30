@@ -7,7 +7,8 @@ import {
   type IsolatedCursorRunResult,
 } from "@/lib/workers/isolated/cursor-run";
 
-const MAX_WORKER_RUNTIME_MILLISECONDS = 30 * 60 * 1_000;
+export const MAX_WORKER_RUNTIME_MILLISECONDS = 8 * 60 * 1_000;
+const WORKER_KILL_GRACE_MILLISECONDS = 5_000;
 
 export const createIsolatedWorkerEnvironment = ({
   nodeEnvironment,
@@ -33,12 +34,18 @@ const runWorkerProcess = async ({
   environment,
   inputPath,
   outputPath,
+  signal,
 }: {
   apiKey: string;
   environment: NodeJS.ProcessEnv;
   inputPath: string;
   outputPath: string;
+  signal?: AbortSignal;
 }): Promise<void> => {
+  if (signal?.aborted) {
+    throw new Error("The isolated worker was aborted before launch.");
+  }
+
   const workerScriptPath = path.join(
     process.cwd(),
     "scripts/run-isolated-cursor-worker.ts",
@@ -57,13 +64,37 @@ const runWorkerProcess = async ({
     {
       env: environment,
       shell: false,
+      signal,
       stdio: ["pipe", "ignore", "pipe"],
     },
   );
+  const exitPromise = new Promise<number | null>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
+  });
   let standardError = "";
-  const timeout = setTimeout(() => {
+  let forceKillTimer: NodeJS.Timeout | null = null;
+  const terminateChild = () => {
+    if (child.exitCode !== null || child.killed) {
+      return;
+    }
+
     child.kill("SIGTERM");
+    forceKillTimer = setTimeout(() => {
+      if (child.exitCode === null) {
+        child.kill("SIGKILL");
+      }
+    }, WORKER_KILL_GRACE_MILLISECONDS);
+    forceKillTimer.unref();
+  };
+  const timeout = setTimeout(() => {
+    terminateChild();
   }, MAX_WORKER_RUNTIME_MILLISECONDS);
+  const handleAbort = () => terminateChild();
+  signal?.addEventListener("abort", handleAbort, { once: true });
+  if (signal?.aborted) {
+    terminateChild();
+  }
 
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk: string) => {
@@ -71,11 +102,12 @@ const runWorkerProcess = async ({
   });
   child.stdin.end(apiKey);
 
-  const exitCode = await new Promise<number | null>((resolve, reject) => {
-    child.once("error", reject);
-    child.once("close", resolve);
-  }).finally(() => {
+  const exitCode = await exitPromise.finally(() => {
     clearTimeout(timeout);
+    if (forceKillTimer) {
+      clearTimeout(forceKillTimer);
+    }
+    signal?.removeEventListener("abort", handleAbort);
   });
 
   if (exitCode !== 0) {
@@ -89,10 +121,12 @@ export const executeIsolatedCursorProcess = async ({
   apiKey,
   input,
   rootDirectory,
+  signal,
 }: {
   apiKey: string;
   input: IsolatedCursorRunInput;
   rootDirectory: string;
+  signal?: AbortSignal;
 }): Promise<IsolatedCursorRunResult> => {
   const workerHome = path.join(rootDirectory, "worker-home");
   const inputPath = path.join(rootDirectory, "worker-input.json");
@@ -113,6 +147,7 @@ export const executeIsolatedCursorProcess = async ({
     }),
     inputPath,
     outputPath,
+    signal,
   });
 
   return JSON.parse(

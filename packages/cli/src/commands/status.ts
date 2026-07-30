@@ -93,7 +93,13 @@ export const runStatus = async (
     }
 
     logProgress(
-      `[watch] ${response.task.status}${response.task.output.pr_url ? ` — ${response.task.output.pr_url}` : ""}`,
+      `[watch] ${response.task.status}${
+        response.task.execution?.state === "retry_wait"
+          ? ` — retry ${response.task.execution.failure_count}, next ${response.task.execution.next_attempt_at ?? "pending"}`
+          : response.task.output.pr_url
+            ? ` — ${response.task.output.pr_url}`
+            : ""
+      }`,
     );
 
     if (isTerminalTaskStatus(response.task.status)) {

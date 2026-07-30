@@ -13,6 +13,7 @@ import { type WorkerAdapter } from "@/lib/workers/types";
 
 import { ControlPlaneError } from "./errors";
 import { appendTaskEvent } from "./events";
+import { reconcileVerifierDispatchRecovery } from "./verifier-recovery";
 
 type TaskRow = {
   actual_cost_usd_micros: number | null;
@@ -25,6 +26,7 @@ type TaskRow = {
   idempotency_key: string;
   output_ref: string | null;
   quote_id: string;
+  repository_binding_id: string | null;
   repository_sha: string;
   repository_url: string;
   result_branch: string | null;
@@ -43,14 +45,18 @@ type TaskRow = {
   verified_at: string | null;
   verifier_conclusion: string | null;
   verifier_evidence: Record<string, unknown> | null;
+  verifier_lease_expires_at: string | null;
   verifier_run_id: number | null;
   verifier_status: string | null;
   worker_completed_at: string | null;
   worker_model: string | null;
+  worker_provider: string | null;
   worker_result: Record<string, unknown> | null;
+  worker_runtime: string | null;
+  verifying_at: string | null;
 };
 
-type TaskDependencies = {
+type TaskLifecycleDependencies = {
   chargeTask?: (
     taskId: string,
   ) => Promise<ChargeVerifiedTaskResult>;
@@ -59,7 +65,7 @@ type TaskDependencies = {
 };
 
 const TASK_SELECT =
-  "id, user_id, quote_id, status, repository_url, repository_sha, task_spec, idempotency_key, agent_id, run_id, worker_model, result_branch, result_pr_url, output_ref, usage, actual_cost_usd_micros, worker_result, verifier_run_id, verifier_status, verifier_conclusion, verifier_evidence, started_at, worker_completed_at, verified_at, completed_at, failed_at, failure_reason, created_at, updated_at";
+  "id, user_id, quote_id, status, repository_url, repository_sha, repository_binding_id, task_spec, idempotency_key, agent_id, run_id, worker_provider, worker_runtime, worker_model, result_branch, result_pr_url, output_ref, usage, actual_cost_usd_micros, worker_result, verifier_run_id, verifier_status, verifier_conclusion, verifier_evidence, verifier_lease_expires_at, started_at, worker_completed_at, verifying_at, verified_at, completed_at, failed_at, failure_reason, created_at, updated_at";
 
 const requireAdminClient = () => {
   const supabase = createAdminClient();
@@ -128,12 +134,98 @@ const recordTerminalFailure = async ({
   });
 };
 
+const startLegacyWorker = async (
+  task: TaskRow,
+  worker: WorkerAdapter,
+) => {
+  if (
+    task.status !== "approved" ||
+    task.repository_binding_id !== null ||
+    task.worker_runtime !== "cloud" ||
+    task.agent_id ||
+    task.run_id
+  ) {
+    return task;
+  }
+
+  const supabase = requireAdminClient();
+  const { data: claimedTask } = await supabase
+    .from("tasks")
+    .update({
+      started_at: new Date().toISOString(),
+      status: "starting",
+    })
+    .eq("id", task.id)
+    .eq("user_id", task.user_id)
+    .eq("status", "approved")
+    .is("repository_binding_id", null)
+    .eq("worker_runtime", "cloud")
+    .is("agent_id", null)
+    .is("run_id", null)
+    .select("id")
+    .maybeSingle();
+
+  if (!claimedTask) {
+    return loadOwnedTask(task.user_id, task.id);
+  }
+
+  await appendTaskEvent({
+    eventType: "worker.starting",
+    taskId: task.id,
+    userId: task.user_id,
+  });
+
+  const startedWorker = await worker.startTask({
+    idempotencyKey: `outcomes-run:${task.idempotency_key}`,
+    repositorySha: task.repository_sha,
+    repositoryUrl: task.repository_url,
+    task: task.task_spec,
+    taskId: task.id,
+  });
+  const { error } = await supabase
+    .from("tasks")
+    .update({
+      agent_id: startedWorker.agentId,
+      run_id: startedWorker.runId,
+      status: "executing",
+      worker_model: startedWorker.modelId,
+      worker_provider: worker.provider,
+      worker_runtime: worker.runtime,
+    })
+    .eq("id", task.id)
+    .eq("user_id", task.user_id)
+    .eq("status", "starting")
+    .is("agent_id", null)
+    .is("run_id", null);
+
+  if (error) {
+    throw new ControlPlaneError({
+      code: "database_error",
+      message: "The legacy Cursor run could not be persisted.",
+      status: 500,
+    });
+  }
+
+  await appendTaskEvent({
+    data: {
+      agent_id: startedWorker.agentId,
+      run_id: startedWorker.runId,
+    },
+    eventType: "worker.started",
+    taskId: task.id,
+    userId: task.user_id,
+  });
+
+  return loadOwnedTask(task.user_id, task.id);
+};
+
 const recoverStaleStartup = async (
   task: TaskRow,
   worker: WorkerAdapter,
 ) => {
   if (
     task.status !== "starting" ||
+    task.worker_runtime !== "cloud" ||
     task.agent_id ||
     task.run_id ||
     !task.started_at ||
@@ -284,6 +376,9 @@ const startVerifier = async (
   const { data: claimedTask } = await supabase
     .from("tasks")
     .update({
+      verifier_lease_expires_at: new Date(
+        Date.now() + 120_000,
+      ).toISOString(),
       verifier_status: "dispatching",
       verifying_at: new Date().toISOString(),
       status: "verifying",
@@ -306,32 +401,41 @@ const startVerifier = async (
       taskId: task.id,
     });
 
-    await supabase
+    const { data: persistedRun, error: persistedRunError } = await supabase
       .from("tasks")
       .update({
         verifier_evidence: { url: startedVerification.url },
+        verifier_lease_expires_at: null,
         verifier_run_id: startedVerification.runId,
         verifier_status: "queued",
       })
       .eq("id", task.id)
       .eq("user_id", task.user_id)
-      .eq("status", "verifying");
-    await appendTaskEvent({
-      data: {
-        run_id: startedVerification.runId,
-        url: startedVerification.url,
-      },
-      eventType: "verifier.started",
-      taskId: task.id,
-      userId: task.user_id,
-    });
+      .eq("status", "verifying")
+      .is("verifier_run_id", null)
+      .select("id")
+      .maybeSingle();
+
+    if (persistedRunError) {
+      throw persistedRunError;
+    }
+
+    if (persistedRun) {
+      await appendTaskEvent({
+        data: {
+          run_id: startedVerification.runId,
+          url: startedVerification.url,
+        },
+        eventType: "verifier.started",
+        taskId: task.id,
+        userId: task.user_id,
+      });
+    }
   } catch {
     await supabase
       .from("tasks")
       .update({
-        status: "worker_succeeded",
-        verifier_status: null,
-        verifying_at: null,
+        verifier_status: "dispatch_unknown",
       })
       .eq("id", task.id)
       .eq("user_id", task.user_id)
@@ -344,6 +448,99 @@ const startVerifier = async (
       status: 502,
     });
   }
+
+  return loadOwnedTask(task.user_id, task.id);
+};
+
+const recoverVerifierDispatch = async (
+  task: TaskRow,
+  verifier: VerifierAdapter,
+) => {
+  if (
+    task.status !== "verifying" ||
+    task.verifier_run_id ||
+    !task.verifying_at ||
+    !task.verifier_lease_expires_at
+  ) {
+    return task;
+  }
+
+  const supabase = requireAdminClient();
+  const recoveryTask = {
+    id: task.id,
+    leaseExpiresAt: task.verifier_lease_expires_at,
+    userId: task.user_id,
+    verifyingAt: task.verifying_at,
+  };
+
+  await reconcileVerifierDispatchRecovery({
+    appendEvent: async (eventType, data) => {
+      await appendTaskEvent({
+        data,
+        eventType,
+        taskId: task.id,
+        userId: task.user_id,
+      });
+    },
+    store: {
+      failUnrecoverable: async (_task, reason) => {
+        const failedAt = new Date().toISOString();
+        const { data, error } = await supabase
+          .from("tasks")
+          .update({
+            failed_at: failedAt,
+            failure_reason: reason,
+            status: "verification_failed",
+            verifier_lease_expires_at: null,
+            verifier_status: "dispatch_unrecoverable",
+          })
+          .eq("id", task.id)
+          .eq("user_id", task.user_id)
+          .eq("status", "verifying")
+          .is("verifier_run_id", null)
+          .select("id")
+          .maybeSingle();
+
+        if (error) {
+          throw new ControlPlaneError({
+            code: "database_error",
+            message: "Verifier recovery failure could not be persisted.",
+            status: 500,
+          });
+        }
+
+        return data !== null;
+      },
+      saveRecovered: async (_task, recovered) => {
+        const { data, error } = await supabase
+          .from("tasks")
+          .update({
+            verifier_evidence: { url: recovered.url },
+            verifier_lease_expires_at: null,
+            verifier_run_id: recovered.runId,
+            verifier_status: "queued",
+          })
+          .eq("id", task.id)
+          .eq("user_id", task.user_id)
+          .eq("status", "verifying")
+          .is("verifier_run_id", null)
+          .select("id")
+          .maybeSingle();
+
+        if (error) {
+          throw new ControlPlaneError({
+            code: "database_error",
+            message: "Recovered verifier state could not be persisted.",
+            status: 500,
+          });
+        }
+
+        return data !== null;
+      },
+    },
+    task: recoveryTask,
+    verifier,
+  });
 
   return loadOwnedTask(task.user_id, task.id);
 };
@@ -454,7 +651,11 @@ const chargeTaskIfVerified = async (
 
 const projectTask = async (task: TaskRow) => {
   const supabase = requireAdminClient();
-  const [{ data: events }, { data: payment }] = await Promise.all([
+  const [
+    { data: events, error: eventsError },
+    { data: payment, error: paymentError },
+    { data: execution, error: executionError },
+  ] = await Promise.all([
     supabase
       .from("task_events")
       .select("id, event_type, event_data, created_at")
@@ -468,12 +669,29 @@ const projectTask = async (task: TaskRow) => {
       .eq("task_id", task.id)
       .eq("user_id", task.user_id)
       .maybeSingle(),
+    supabase
+      .from("task_execution_attempts")
+      .select(
+        "id, claim_count, failure_count, state, next_attempt_at, customer_error_code, customer_error_message, started_at, completed_at",
+      )
+      .eq("task_id", task.id)
+      .eq("user_id", task.user_id)
+      .maybeSingle(),
   ]);
+
+  if (eventsError || paymentError || executionError) {
+    throw new ControlPlaneError({
+      code: "database_error",
+      message: "Task status evidence could not be loaded.",
+      status: 500,
+    });
+  }
 
   return {
     agent_id: task.agent_id,
     completed_at: task.completed_at,
     created_at: task.created_at,
+    execution: execution ?? null,
     failure:
       task.failure_reason || task.failed_at
         ? {
@@ -509,23 +727,33 @@ const projectTask = async (task: TaskRow) => {
   };
 };
 
-export const getTaskStatus = async (
+export const reconcileTaskLifecycle = async (
   principal: CustomerPrincipal,
   taskId: string,
-  dependencies: TaskDependencies = {},
+  dependencies: TaskLifecycleDependencies = {},
 ) => {
   const worker =
     dependencies.worker ?? new CursorCloudWorkerAdapter();
   const verifier =
     dependencies.verifier ?? new GitHubActionsVerifierAdapter();
   const chargeTask = dependencies.chargeTask ?? chargeVerifiedTask;
-
   let task = await loadOwnedTask(principal.userId, taskId);
+
+  task = await startLegacyWorker(task, worker);
   task = await recoverStaleStartup(task, worker);
   task = await reconcileWorker(task, worker);
   task = await startVerifier(task, verifier);
+  task = await recoverVerifierDispatch(task, verifier);
   task = await reconcileVerifier(task, verifier);
   task = await chargeTaskIfVerified(task, chargeTask);
 
+  return projectTask(task);
+};
+
+export const getTaskStatus = async (
+  principal: CustomerPrincipal,
+  taskId: string,
+) => {
+  const task = await loadOwnedTask(principal.userId, taskId);
   return projectTask(task);
 };

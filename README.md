@@ -151,8 +151,9 @@ verification result, and sandbox payment status.
 The expected lifecycle is:
 
 ```text
-quote → explicit approval → Cursor Cloud worker → trusted GitHub verification
-      → Pinch sandbox charge → completed
+snapshot quote → explicit approval → durable execution claim
+  → exact-SHA isolated Cursor worker → deterministic draft PR
+  → trusted GitHub verification → Pinch sandbox charge → completed
 ```
 
 Quote creation does not start work or submit a payment. The agent must present
@@ -164,10 +165,11 @@ the quote and receive explicit approval before calling
 - Customer signup, sandbox billing onboarding, and API-key management
 - Authenticated Streamable HTTP MCP and REST endpoints
 - Immutable, expiring, idempotent fixed-price quotes
-- Atomic quote acceptance and asynchronous Cursor Cloud execution
+- Atomic quote acceptance and lease-backed isolated Cursor execution
+- Deterministic GitHub App branch, commit, and draft-PR publication
 - Trusted GitHub Actions verification against the quoted repository SHA
 - Exactly-once Pinch sandbox charging after verified success
-- Task status reconciliation across worker, verifier, and payment states
+- Scheduled task reconciliation independent of customer status polling
 
 The current quote is AUD 12.50 in sandbox mode. Outcomes rejects other
 repositories, commits, and task contracts; this is an intentional MVP safety
@@ -198,6 +200,77 @@ isolated local Supabase Postgres 17 migration replay, transactional database
 assertions, and database lint. The migration is applied to production, with
 remote history and service-role Data API access verified. The new endpoints
 are not yet included in the live workflow claims above.
+
+### Task 4 implementation status
+
+Binding-backed acceptance now queues one durable task without launching a
+provider inline. `task_execution_attempts` atomically claims each task with a
+rotating lease token, recovers expired leases, and persists run, internal
+failure, changed-file, commit, branch, and PR evidence. The orchestrator reloads
+and hashes the accepted quote, underwriting, binding, snapshot, installation,
+repository ID, base branch, and SHA before execution. Current GitHub App
+permissions and the exact branch tip/commit are checked again before clone.
+One execution is claimed per invocation. A 90-second fenced lease is renewed
+every 20 seconds throughout external work; loss aborts the child process and
+prevents publication/completion/failure writes. Temporary provider failures use
+30/60-second bounded backoff before the third failure becomes terminal.
+Evidence and policy failures fail immediately.
+
+Vercel invokes the authenticated internal reconciler every minute; `GET
+/api/v1/tasks/:taskId` is now read-only. Set `CRON_SECRET` and keep
+`OUTCOMES_EXECUTION_BATCH_SIZE=1`; larger values only bound downstream legacy,
+verification, and payment reconciliation because isolated execution is fixed
+to one claim. The one-minute schedule requires a Vercel plan that supports
+sub-daily cron jobs. For local reconciliation:
+
+```bash
+npm run tasks:reconcile -- --batch 1
+```
+
+REST and CLI status share an explicit customer-safe execution contract. Human
+CLI output includes execution/retry state, claim and failure counts, next retry
+time, and safe failure reason. A cron response is HTTP `207` with
+`partial: true` when downstream reconciliation only partially succeeds.
+
+Execution remains fail-closed to the single existing repository/SHA/task
+allowlist and its trusted verifier profile. The snapshot URL/SHA legacy quote
+shape remains compatible and advances through the prior Cursor Cloud lifecycle
+in the background; it is never claimed by the isolated runner. Verifier
+dispatch recovery discovers the task-keyed workflow run and fails closed rather
+than redispatching when identity cannot be established. Pinch
+`reserved`/`submitting`/`unknown` payments reconcile and, only after a
+definitive no-replay result, resubmit with the same provider nonce. The payment
+reservation snapshots payer, source, amount, and currency; recovery never
+switches to a newer default source. Conditional transitions preserve an
+already-approved/pending payment and completed task over a late ambiguous
+response. Payment creation/mutation is service-only, and the database protects
+the reserved provider payload from later edits. Only documented
+request/rejection responses (`400`/`422`) are terminal; authentication,
+not-found, conflict, throttling, transport, and `5xx` responses remain
+recoverable.
+
+Safe rollout order is: deploy this application version first, then promptly
+apply `20260730163203_task_execution_claims.sql`, then enable cron. The migration
+backfills approved binding-backed tasks without run evidence to
+`isolated_local`. During the narrow rolling window, binding-backed cloud tasks
+that already reached `starting` or `executing` continue through the prior cloud
+lifecycle, but no newly approved binding-backed task is started on Cloud.
+
+The Vercel route is an explicitly bounded hackathon runner: its Node child is
+capped at eight minutes inside an 800-second route, and tracing includes the
+worker script, its direct `cursor-run.ts` dependency, the Cursor SDK, and `tsx`.
+The deployment still requires a usable `git`
+executable, writable temporary storage, child-process support, and enough
+memory. These are not generalized production sandbox guarantees; use
+`npm run tasks:reconcile -- --batch 1` on a controlled local/external worker
+when the hosting runtime cannot provide them. Cursor usage is persisted, but
+the current local SDK result does not expose authoritative provider cost, so
+`actual_cost_usd_micros` remains `null` rather than estimated. The Task 4
+migration is applied to production and its schema is queryable; no live Task 4
+run is claimed here. Only validated change/run evidence is durable; the local
+checkout is ephemeral and cannot resume an interrupted Cursor process. A
+durable external worker and globally fenced payment lease remain post-hackathon
+production hardening.
 
 ## REST API
 
@@ -274,7 +347,7 @@ in Task 3.
 - A worker reporting success is not enough to charge. The trusted verifier must
   pass first.
 - Pinch payment nonces and database uniqueness constraints prevent duplicate
-  charges during retries and repeated status polling.
+  charges during retries. Worker or PR success alone never triggers payment.
 - The deployed integration is sandbox-only. It does not move real money.
 
 Revoke a key from the dashboard immediately if it is exposed.
@@ -333,7 +406,7 @@ open the dashboard and select **Install GitHub App**. The callback verifies the
 installation against the authorizing GitHub user before persisting it; the
 untrusted `installation_id` query parameter is never accepted on its own.
 
-The worker spike mints repository-scoped installation tokens for at most one
+The isolated worker path mints repository-scoped installation tokens for at most one
 hour and revokes each token after clone or publication. The local Cursor agent
 runs in a separate process with a fresh home directory, an explicit sandbox,
 no ambient settings, no Git metadata, and no GitHub credential. A publisher

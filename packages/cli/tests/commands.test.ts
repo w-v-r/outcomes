@@ -7,6 +7,7 @@ import {
   CLI_EXIT,
   exitCodeForStatusQuery,
   mapApiErrorToCliExit,
+  type CustomerTask,
 } from "@outcomes/contracts";
 import { describe, expect, test, vi } from "vitest";
 
@@ -23,7 +24,10 @@ import {
   type GitExecutor,
 } from "../src/git/discovery.js";
 import { mapClientErrorToExit } from "../src/exit-mapping.js";
-import { formatQuoteHuman } from "../src/output/format.js";
+import {
+  formatQuoteHuman,
+  formatTaskOutcomeHuman,
+} from "../src/output/format.js";
 import * as tty from "../src/tty.js";
 import type { OutcomesClient } from "@outcomes/client";
 
@@ -177,6 +181,58 @@ const captureStdout = () => {
 };
 
 describe("CLI command flows", () => {
+  test("human status shows retry scheduling and claim evidence", () => {
+    const retryingTask = {
+      agent_id: null,
+      completed_at: null,
+      created_at: "2026-07-31T00:00:00.000Z",
+      execution: {
+        claim_count: 2,
+        completed_at: null,
+        customer_error_code: "retry_scheduled",
+        customer_error_message:
+          "A temporary execution failure will be retried automatically.",
+        failure_count: 1,
+        id: "77777777-7777-4777-8777-777777777777",
+        next_attempt_at: "2026-07-31T00:01:00.000Z",
+        started_at: null,
+        state: "retry_wait" as const,
+      },
+      failure: null,
+      id: taskId,
+      output: { branch: null, pr_url: null, ref: null },
+      payment: null,
+      quote_id: quoteId,
+      repository_sha: headSha,
+      repository_url: binding.repository.url,
+      run_id: null,
+      started_at: null,
+      status: "starting",
+      task,
+      timeline: [],
+      updated_at: "2026-07-31T00:00:00.000Z",
+      usage: null,
+      verified_at: null,
+      verifier: {
+        conclusion: null,
+        evidence: null,
+        run_id: null,
+        status: null,
+      },
+      worker_model: null,
+    } satisfies CustomerTask;
+
+    expect(formatTaskOutcomeHuman(retryingTask)).toContain(
+      "Execution: retry_wait",
+    );
+    expect(formatTaskOutcomeHuman(retryingTask)).toContain(
+      "Claims: 2",
+    );
+    expect(formatTaskOutcomeHuman(retryingTask)).toContain(
+      "Next attempt: 2026-07-31T00:01:00.000Z",
+    );
+  });
+
   test("rejected quote exits 4 and is not treated as a network failure", async () => {
     const stateDirectory = mkdtempSync(
       path.join(os.tmpdir(), "outcomes-cli-cmd-"),

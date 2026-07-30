@@ -758,16 +758,67 @@ evidence tables were verified. No new endpoint was live-verified in this slice.
 
 ### Milestone 3 — Generalize narrow execution and verification
 
-- Replace the fixture worker prompt and fixed SQL task title.
+- Replace the fixture worker prompt and fixed SQL task title. **Task 4: done for
+  the accepted persisted contract.**
 - Register at least two allowlisted repository verifier profiles.
 - Add explicit base branch and repository-access bindings to task execution.
+  **Task 4: done.**
 - Add durable background reconciliation and verifier-dispatch idempotency.
+  **Task 4: execution claims and background progression done; additional
+  verifier profiles remain pending.**
 - Wire model selection, actual usage, and available limits to over-budget
   terminal behavior.
 - Exercise verified success and no-charge failure on the second repository.
 
 Exit: two repositories can execute bounded tasks and produce independently
 verified PRs without customer polling driving progress.
+
+#### Task 4 execution connection status — 31 July 2026
+
+Implemented and migrated in production, but not yet live-verified:
+
+- binding-backed acceptance now commits one task and leaves progression to the
+  shared server reconciler rather than launching Cursor inline;
+- service-role-only RPCs atomically claim one isolated task per invocation,
+  heartbeat a 90-second fenced lease every 20 seconds, reject stale terminal
+  writes, defer retryable failures with bounded backoff, and exclude
+  cloud/legacy or unrelated active-run evidence;
+- one service validates the accepted quote hash, underwriting, binding,
+  snapshot, installation, repository ID, base branch, SHA, and persisted task
+  contract before invoking any provider;
+- the existing isolated local Cursor process and deterministic GitHub App
+  publisher now recheck installation permissions and the exact branch/commit
+  before clone, persist run evidence before publication, and reuse an existing
+  deterministic open/closed/merged branch/PR after ambiguous persistence
+  failures; file mode is part of publication identity;
+- status reads no longer mutate state; a `CRON_SECRET`-protected, bounded Vercel
+  cron progresses execution, verification, and payment independently;
+- legacy accepted tasks advance through their prior cloud lifecycle;
+  task-keyed verifier dispatch recovery never blindly redispatches, and
+  conditional recovery transitions prevent stale verifier events/terminal
+  writes; reserved/submitting Pinch payments preserve snapshotted payer/source/
+  amount evidence and reconcile or resubmit with one nonce;
+- worker/PR success still cannot charge. The existing trusted verifier must pass
+  before the exactly-once sandbox payment service is called.
+
+The execution policy deliberately remains restricted to the current fixture
+repository, SHA, task contract, and verifier profile. Generalized repository
+support, a second verifier profile, model-budget cancellation, authoritative
+Cursor provider-cost capture, and live capture-to-PR verification remain
+pending. The Task 4 migration is applied to the linked production project;
+remote history and service-role schema access were verified. Vercel is only a
+bounded hackathon runner (eight-minute child inside an 800-second route);
+`git`, child-process,
+temporary-storage, and memory availability must be live-verified or the
+local/external reconciler used. The full migration replay and transactional
+claim assertions pass on ephemeral Postgres 17.10.
+
+Rollout is intentionally narrow: deploy the new app, promptly apply the
+migration, then enable cron. Approved binding-backed tasks without runs are
+backfilled to `isolated_local`; binding-backed cloud work already in
+`starting`/`executing` is reconciled with its stable cloud idempotency key.
+Local workspaces and in-flight Cursor processes remain ephemeral; durable
+external execution and a globally fenced payment lease are post-hackathon work.
 
 ### Milestone 4 — Assessment, pricing v2, and calibration runs
 
@@ -921,15 +972,15 @@ and keep payment sandbox-only.
 
 ## Current implementation sequence
 
-Milestone 1, the repository snapshot foundation, and Task 2's deterministic
-snapshot-backed assessment/pricing services are implemented. The remaining
+Milestone 1, the repository snapshot foundation, Task 2 pricing, Task 3 CLI,
+and Task 4's local execution connection are implemented. The remaining
 sequence is:
 
-1. Add CLI discovery and product polish over the same application services
-   used by REST and MCP.
-2. Connect quote acceptance to the isolated worker, deterministic publisher,
-   reconciliation, and verification path.
-3. Add structured classification and perform calibration runs before changing
+1. Independently review and apply the Task 4 migration, configure the cron, and
+   live-verify capture → quote → accept → isolated worker → draft PR.
+2. Publish the CLI and add remaining MCP capture/assessment adapters.
+3. Add a second trusted verifier profile and widen execution only with evidence.
+4. Add structured classification and perform calibration runs before changing
    the explicitly uncalibrated commercial policy.
 
 ## Explicitly deferred from the first slice

@@ -1,6 +1,7 @@
 import {
   isSnapshotQuote,
   type CustomerQuote,
+  type CustomerTask,
 } from "@outcomes/contracts";
 
 export type OutputMode = "human" | "json";
@@ -103,13 +104,30 @@ export const formatQuoteHuman = (quote: CustomerQuote): string => {
   return lines.join("\n");
 };
 
-export const formatTaskOutcomeHuman = (task: {
-  output: { pr_url: string | null };
-  payment: { status?: string | null } | null;
-  status: string;
-  verifier: { conclusion: string | null; status: string | null };
-}) => {
+export const formatTaskOutcomeHuman = (task: CustomerTask) => {
   const lines = [`Task status: ${task.status}`];
+
+  if (task.execution) {
+    lines.push(
+      `Execution: ${task.execution.state}`,
+      `Claims: ${task.execution.claim_count}`,
+      `Retry failures: ${task.execution.failure_count}`,
+    );
+
+    if (task.execution.next_attempt_at) {
+      lines.push(`Next attempt: ${task.execution.next_attempt_at}`);
+    }
+
+    if (task.execution.customer_error_message) {
+      lines.push(
+        `Execution reason: ${task.execution.customer_error_message}`,
+      );
+    }
+  }
+
+  if (task.failure?.reason) {
+    lines.push(`Failure: ${task.failure.reason}`);
+  }
 
   if (task.output.pr_url) {
     lines.push(`Pull request: ${task.output.pr_url}`);

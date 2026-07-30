@@ -10,6 +10,10 @@ export type RefreshedVerification = {
 };
 
 export interface VerifierAdapter {
+  recoverVerification?(input: {
+    dispatchedAfter: string;
+    taskId: string;
+  }): Promise<StartedVerification | null>;
   refreshVerification(
     runId: number,
   ): Promise<RefreshedVerification>;

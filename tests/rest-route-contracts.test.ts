@@ -106,6 +106,7 @@ describe("REST route contract imports", () => {
           agent_id: null,
           completed_at: null,
           created_at: "2026-07-31T00:00:00.000Z",
+          execution: null,
           failure: null,
           id: "44444444-4444-4444-8444-444444444444",
           output: { branch: null, pr_url: null, ref: null },

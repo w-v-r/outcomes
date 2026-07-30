@@ -178,11 +178,32 @@ export const acceptQuoteResponseSchema = z
   })
   .strict();
 
+export const customerTaskExecutionSchema = z
+  .object({
+    claim_count: z.number().int().positive(),
+    completed_at: z.string().nullable(),
+    customer_error_code: z.string().nullable(),
+    customer_error_message: z.string().nullable(),
+    failure_count: z.number().int().nonnegative(),
+    id: z.string().uuid(),
+    next_attempt_at: z.string().nullable(),
+    started_at: z.string().nullable(),
+    state: z.enum([
+      "claimed",
+      "publishing",
+      "retry_wait",
+      "succeeded",
+      "failed",
+    ]),
+  })
+  .strict();
+
 export const customerTaskSchema = z
   .object({
     agent_id: z.string().nullable(),
     completed_at: z.string().nullable(),
     created_at: z.string(),
+    execution: customerTaskExecutionSchema.nullable(),
     failure: z
       .object({
         at: z.string().nullable(),

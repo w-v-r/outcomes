@@ -49,6 +49,47 @@ const wait = (milliseconds: number) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 export class GitHubActionsVerifierAdapter implements VerifierAdapter {
+  async recoverVerification({
+    dispatchedAfter,
+    taskId,
+  }: {
+    dispatchedAfter: string;
+    taskId: string;
+  }): Promise<StartedVerification | null> {
+    const response = await githubRequest(
+      `/repos/${FIXTURE_REPOSITORY.fullName}/actions/workflows/${FIXTURE_REPOSITORY.verifierWorkflow}/runs?event=workflow_dispatch&per_page=100`,
+    );
+    const payload = (await response.json()) as {
+      workflow_runs?: Array<{
+        created_at: string;
+        display_title: string;
+        html_url: string;
+        id: number;
+      }>;
+    };
+    const dispatchedAt = new Date(dispatchedAfter).getTime();
+    const matchingRuns = (payload.workflow_runs ?? []).filter((run) => {
+      const createdAt = new Date(run.created_at).getTime();
+
+      return (
+        Number.isFinite(dispatchedAt) &&
+        createdAt >= dispatchedAt - 2_000 &&
+        run.display_title === `Verify Outcomes task ${taskId}`
+      );
+    });
+
+    if (matchingRuns.length > 1) {
+      throw new Error(
+        "Multiple verifier runs match the deterministic task dispatch identity.",
+      );
+    }
+
+    const matchingRun = matchingRuns[0];
+    return matchingRun
+      ? { runId: matchingRun.id, url: matchingRun.html_url }
+      : null;
+  }
+
   async startVerification({
     baselineSha,
     resultRef,
@@ -58,7 +99,7 @@ export class GitHubActionsVerifierAdapter implements VerifierAdapter {
     resultRef: string;
     taskId: string;
   }): Promise<StartedVerification> {
-    const dispatchedAt = Date.now();
+    const dispatchedAt = new Date().toISOString();
 
     await githubRequest(
       `/repos/${FIXTURE_REPOSITORY.fullName}/actions/workflows/${FIXTURE_REPOSITORY.verifierWorkflow}/dispatches`,
@@ -80,31 +121,13 @@ export class GitHubActionsVerifierAdapter implements VerifierAdapter {
         await wait(500);
       }
 
-      const response = await githubRequest(
-        `/repos/${FIXTURE_REPOSITORY.fullName}/actions/workflows/${FIXTURE_REPOSITORY.verifierWorkflow}/runs?event=workflow_dispatch&per_page=10`,
-      );
-      const payload = (await response.json()) as {
-        workflow_runs?: Array<{
-          created_at: string;
-          display_title: string;
-          html_url: string;
-          id: number;
-        }>;
-      };
-      const matchingRun = payload.workflow_runs?.find((run) => {
-        const createdAt = new Date(run.created_at).getTime();
-
-        return (
-          createdAt >= dispatchedAt - 2_000 &&
-          run.display_title === `Verify Outcomes task ${taskId}`
-        );
+      const matchingRun = await this.recoverVerification({
+        dispatchedAfter: dispatchedAt,
+        taskId,
       });
 
       if (matchingRun) {
-        return {
-          runId: matchingRun.id,
-          url: matchingRun.html_url,
-        };
+        return matchingRun;
       }
     }
 

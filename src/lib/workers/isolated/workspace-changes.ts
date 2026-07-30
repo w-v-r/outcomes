@@ -32,6 +32,69 @@ export type ValidatedWorkspaceChange = {
   status: "added" | "deleted" | "modified";
 };
 
+export const assertPersistedWorkspaceChanges = ({
+  allowedPaths,
+  changes,
+}: {
+  allowedPaths: string[];
+  changes: ValidatedWorkspaceChange[];
+}): void => {
+  if (
+    changes.length === 0 ||
+    changes.length > MAX_CHANGED_FILES ||
+    allowedPaths.length === 0
+  ) {
+    throw new Error("Persisted workspace changes exceed the safe file scope.");
+  }
+
+  let totalBytes = 0;
+
+  for (const change of changes) {
+    if (
+      !isSafeRepositoryPath(change.path) ||
+      isProhibitedPath(change.path) ||
+      !isAllowedPath({
+        allowedPaths,
+        changedPath: change.path,
+      })
+    ) {
+      throw new Error("Persisted workspace changes contain an unsafe path.");
+    }
+
+    if (change.status === "deleted") {
+      if (change.contentBase64 || change.mode) {
+        throw new Error("Deleted workspace changes contain unexpected content.");
+      }
+
+      continue;
+    }
+
+    if (
+      !change.contentBase64 ||
+      !change.mode ||
+      !["100644", "100755"].includes(change.mode)
+    ) {
+      throw new Error("Persisted workspace change content is incomplete.");
+    }
+
+    const content = Buffer.from(change.contentBase64, "base64");
+
+    if (
+      content.toString("base64") !== change.contentBase64 ||
+      content.byteLength > MAX_FILE_BYTES ||
+      content.includes(0)
+    ) {
+      throw new Error("Persisted workspace change content is unsafe.");
+    }
+
+    totalBytes += content.byteLength;
+
+    if (totalBytes > MAX_TOTAL_BYTES) {
+      throw new Error("Persisted workspace changes exceed the safe byte scope.");
+    }
+  }
+};
+
 const runGit = async ({
   args,
   gitDirectory,

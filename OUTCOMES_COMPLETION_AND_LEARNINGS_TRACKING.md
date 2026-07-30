@@ -636,12 +636,95 @@ Status: **implemented locally; not published; not live E2E verified**.
 - **Not claimed:** npm publication, production end-to-end quote/accept/run, or
   MCP parity for capture/assessment.
 
-Task 4 blockers (remaining):
+Post-Task 3 blockers:
 
 - Publish `@outcomes/cli` and document supported `npx` usage against a released
   version.
 - Live-verify capture → quote → accept → watch against production with a
   supported repository and billing-ready account.
 - Add MCP adapters for capture/assessment or document REST-only agent playbooks.
-- Background reconciliation so tasks progress without continuous CLI polling.
 - Generalized execution/verification beyond the current allowlisted envelope.
+
+## 31 July 2026 — Task 4 isolated execution connection
+
+Status: **implemented, deterministically tested, and migrated in production;
+production flow not yet live-verified**.
+
+### Implemented
+
+- Acceptance remains atomic and idempotent but no longer launches a provider
+  inside the REST/MCP request. Replays return the same persisted task.
+- Added `task_execution_attempts` and service-role-only RPCs for atomic claims,
+  20-second heartbeat of a 90-second fenced lease, stale-lease recovery,
+  bounded retry backoff, run evidence, fenced terminal failure, and atomic
+  publication completion. One invocation claims one isolated task; stale
+  claimants cannot renew, fail, publish, or complete it.
+- Added one injectable server orchestrator that reconstructs the accepted task,
+  quote contract hash, underwriting, binding, snapshot, manifest, installation,
+  repository ID, base branch, and exact SHA from persistence.
+- Hardened the existing isolated worker to recheck the current GitHub App
+  installation, write permissions, repository identity, exact branch tip, and
+  commit before cloning the accepted SHA.
+- Worker prompts, titles, acceptance criteria, prohibited constraints, and
+  allowed paths derive from the accepted persisted contract and immutable
+  analysis/manifest evidence.
+- Persisted Cursor agent/run evidence before publication. The publisher derives
+  mode-sensitive deterministic `outcomes/task-*` branch and commit identities
+  and discovers an existing matching open, closed, or merged PR after ambiguous
+  retries. Post-success credential/workspace cleanup failures are retained as
+  warnings instead of causing duplicate publication.
+- Made customer task status read-only and exposed customer-safe attempt state
+  while retaining detailed internal failures on the service-only attempt row.
+- Added a `CRON_SECRET`-protected, bounded internal route, one-minute Vercel
+  cron, and local `tasks:reconcile` command. The same background invocation
+  advances trusted verification and exactly-once sandbox payment after worker
+  publication; CLI polling is not involved.
+- Preserved background legacy Cursor Cloud starts without allowing the isolated
+  claimant to adopt them. Added task-keyed verifier dispatch discovery and
+  fail-closed ambiguity handling. Pinch crash recovery now queries and reuses
+  the deterministic nonce before any same-nonce resubmission.
+- Snapshotted immutable Pinch payer/source/amount evidence and added conditional
+  state precedence so late ambiguity cannot overwrite approved/pending payment
+  or completed-task state. Payment creation and mutation are now service-only,
+  and a database trigger protects the reserved provider payload. Verifier
+  recovery events and terminal failure are emitted only when their conditional
+  transition wins.
+- PR recovery now reuses open PRs, reopens closed-unmerged PRs, represents
+  merged delivery, rejects multiple exact matches, and can recover an existing
+  exact publication after the protected base moves without creating new work.
+- Replayed every migration on ephemeral Postgres 17.10 and ran transactional
+  assertions for claim exclusion, duplicate claims, lease fencing/renewal,
+  retry delay, RLS, and service-role-only RPC grants.
+
+### Safety and limitations
+
+- No charge occurs for worker completion or PR creation. Only the pre-existing
+  independent verifier can move a task to the payment service.
+- Execution remains fail-closed to the current fixture repository, pinned SHA,
+  exact bounded task, persisted source-file scope, and trusted verifier profile.
+- Legacy URL/SHA quotes remain compatible and advance through the prior cloud
+  lifecycle; they are not claimed by the binding-backed executor.
+- The Vercel route is only a bounded hackathon runner: worker runtime is eight
+  minutes inside an 800-second route and still depends on `git`, child-process
+  support, writable temporary storage, and adequate memory. Use the
+  local/external reconciler when those are unavailable.
+- Cursor token usage is persisted, but the local SDK result does not provide an
+  authoritative provider charge. `actual_cost_usd_micros` remains `null`.
+- Only validated run/change evidence is durable. The isolated checkout and
+  in-flight Cursor process remain ephemeral; a durable external worker and
+  globally fenced payment claim are production hardening items.
+- The migration was applied to the linked production project. Remote history
+  and service-role Data API access to execution, task, and payment evidence
+  were verified. Production cron credentials are configured, but no live
+  Task 4 Cursor run, GitHub publication, verifier run, or payment was performed.
+
+### Remaining prerequisites
+
+- Deploy the application/cron version that consumes
+  `20260730163203_task_execution_claims.sql`.
+- Keep `CRON_SECRET`, execution credentials, and the Vercel cron configured in
+  the deployment project.
+- Run a disposable live capture → quote → accept → draft PR flow, inspect exact
+  ancestry/scope, and verify both successful payment gating and no-charge
+  failure.
+- Add a second trusted repository/verifier profile before widening eligibility.
