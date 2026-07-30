@@ -728,14 +728,32 @@ The migration was applied to the linked production project on 31 July 2026.
 Remote migration history, the new tables, the active-installation filter, and
 service-role Data API access were verified after application.
 
-Still pending in the next pricing slice:
+#### Task 2 pricing expansion status — 31 July 2026
 
-- external-source/Linear binding;
-- loading the captured manifest in quote analysis instead of
-  `FIXTURE_MANIFEST`;
-- attaching the binding and manifest hash to quote underwriting and the
-  commercial contract;
-- broader analysis eligibility while execution remains allowlisted.
+The snapshot-backed pricing slice is implemented locally:
+
+- API-key REST discovery exposes active installation generations through
+  customer-safe DTOs, and REST preflight captures immutable bindings without
+  accepting a caller-supplied user ID;
+- binding-backed assessment and quote services reconstruct and strictly
+  validate the owned binding/snapshot pair before using the persisted manifest;
+- quote, underwriting, accepted-task, replay, and contract-hash evidence now
+  include binding, snapshot, manifest, repository/base, and policy identity;
+- non-binding assessments require caller-supplied normalized Linear issue
+  content hashes and support broader repository analysis while execution stays
+  allowlisted;
+- an uncalibrated variable policy separates customer-safe rationale from
+  internal worker, analysis, verification, retry/risk, payment, margin, and
+  commercial-minimum coverage;
+- the original fixture request and AUD 12.50 regression remain an isolated
+  compatibility path.
+
+The Task 2 migration replays on an isolated local Supabase Postgres 17 stack.
+Transactional assertions verify atomic quote/underwriting persistence and
+replay, acceptance evidence copying, immutable underwriting, service-only
+assessment access, and RPC grants; database lint reports no public-schema
+errors. The migration was not applied remotely, and no new endpoint was
+live-verified in this slice.
 
 ### Milestone 3 — Generalize narrow execution and verification
 
@@ -765,6 +783,12 @@ verified PRs without customer polling driving progress.
 Exit: WIL-44 and WIL-43 cannot become executable quotes; bounded issues receive
 non-identical, explainable ranges; completed calibration tasks remain within
 their internal budgets and the fixed customer price covers observed costs.
+
+Task 2 implements the deterministic `assessTask` REST service, semantic safety
+gate, variable policy, immutable evidence, and customer-safe rationale portions
+of this milestone. Structured LLM classification, the nine-issue evaluation,
+execution runs, and calibration remain pending; no calibrated-pricing claim is
+made.
 
 ### Milestone 5 — Product CLI and MCP parity
 
@@ -880,15 +904,16 @@ and keep payment sandbox-only.
 
 ## Current implementation sequence
 
-Milestone 1 and the minimal repository-binding and snapshot foundation are
-implemented and verified. The remaining sequence is:
+Milestone 1, the repository snapshot foundation, and Task 2's deterministic
+snapshot-backed assessment/pricing services are implemented. The remaining
+sequence is:
 
-1. Expand assessment and pricing against captured repository snapshots while
-   keeping execution eligibility allowlisted.
-2. Add CLI discovery and product polish over the same application services
+1. Add CLI discovery and product polish over the same application services
    used by REST and MCP.
-3. Connect quote acceptance to the isolated worker, deterministic publisher,
+2. Connect quote acceptance to the isolated worker, deterministic publisher,
    reconciliation, and verification path.
+3. Add structured classification and perform calibration runs before changing
+   the explicitly uncalibrated commercial policy.
 
 ## Explicitly deferred from the first slice
 

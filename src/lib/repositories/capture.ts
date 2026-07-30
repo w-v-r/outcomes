@@ -6,11 +6,11 @@ import { z } from "zod";
 
 import {
   GitHubAppClient,
+  GitHubAppRequestError,
   GitHubInstallationClient,
   type GitHubInstallation,
 } from "@/lib/github-app/client";
 import { getGitHubAppConfig } from "@/lib/github-app/config";
-import { assertExecutionPermissions } from "@/lib/github-app/permissions";
 import {
   REPOSITORY_BINDING_SCHEMA_VERSION,
   REPOSITORY_SNAPSHOT_SCHEMA_VERSION,
@@ -106,6 +106,43 @@ export type RepositoryCaptureResult = {
   snapshotId: string;
 };
 
+export type RepositoryCaptureErrorCode =
+  | "base_ref_mismatch"
+  | "commit_tree_mismatch"
+  | "installation_disconnected"
+  | "installation_identity_mismatch"
+  | "installation_not_owned"
+  | "installation_permissions_invalid"
+  | "installation_suspended"
+  | "repository_access_denied"
+  | "repository_identity_mismatch";
+
+export class RepositoryCaptureError extends Error {
+  readonly code: RepositoryCaptureErrorCode;
+
+  constructor(code: RepositoryCaptureErrorCode, message: string) {
+    super(message);
+    this.name = "RepositoryCaptureError";
+    this.code = code;
+  }
+}
+
+const mapGitHubRequest = async <Result>(
+  operation: () => Promise<Result>,
+  code: RepositoryCaptureErrorCode,
+  message: string,
+): Promise<Result> => {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof GitHubAppRequestError) {
+      throw new RepositoryCaptureError(code, message);
+    }
+
+    throw error;
+  }
+};
+
 export class DeterministicRepositorySnapshotConflictError extends Error {
   constructor() {
     super(
@@ -141,24 +178,32 @@ const assertStoredInstallation = (
     installation.id !== input.storedInstallationId ||
     installation.userId !== input.userId
   ) {
-    throw new Error(
+    throw new RepositoryCaptureError(
+      "installation_not_owned",
       "The GitHub App installation does not belong to the requesting user.",
     );
   }
 
   if (installation.suspendedAt) {
-    throw new Error("The Outcomes GitHub App installation is suspended.");
+    throw new RepositoryCaptureError(
+      "installation_suspended",
+      "The Outcomes GitHub App installation is suspended.",
+    );
   }
 
   if (installation.disconnectedAt) {
-    throw new Error("The Outcomes GitHub App installation is disconnected.");
+    throw new RepositoryCaptureError(
+      "installation_disconnected",
+      "The Outcomes GitHub App installation is disconnected.",
+    );
   }
 
   if (
     installation.permissions.contents !== "write" ||
     installation.permissions.pull_requests !== "write"
   ) {
-    throw new Error(
+    throw new RepositoryCaptureError(
+      "installation_permissions_invalid",
       "The Outcomes GitHub App installation no longer has the required repository permissions.",
     );
   }
@@ -175,12 +220,24 @@ const assertCurrentInstallation = ({
     current.installationId !== stored.installationId ||
     current.appId !== stored.appId
   ) {
-    throw new Error(
+    throw new RepositoryCaptureError(
+      "installation_identity_mismatch",
       "GitHub returned an installation that does not match the stored access binding.",
     );
   }
 
-  assertExecutionPermissions(current);
+  if (
+    current.permissions.contents !== "write" ||
+    current.permissions.pull_requests !== "write" ||
+    current.suspendedAt
+  ) {
+    throw new RepositoryCaptureError(
+      current.suspendedAt
+        ? "installation_suspended"
+        : "installation_permissions_invalid",
+      "The current GitHub App installation cannot capture this repository.",
+    );
+  }
 };
 
 const createSupabaseCaptureStore =
@@ -404,15 +461,30 @@ export const createRepositoryCaptureService = (
     });
 
     if (!storedInstallation) {
-      throw new Error(
+      throw new RepositoryCaptureError(
+        "installation_not_owned",
         "The GitHub App installation does not belong to the requesting user.",
       );
     }
 
     assertStoredInstallation(storedInstallation, input);
-    const currentInstallation = await dependencies.appClient.getInstallation(
-      storedInstallation.installationId,
-    );
+    let currentInstallation: GitHubInstallation;
+
+    try {
+      currentInstallation =
+        await dependencies.appClient.getInstallation(
+          storedInstallation.installationId,
+        );
+    } catch (error) {
+      if (error instanceof GitHubAppRequestError) {
+        throw new RepositoryCaptureError(
+          "repository_access_denied",
+          "The current GitHub App installation could not be verified.",
+        );
+      }
+
+      throw error;
+    }
     assertCurrentInstallation({
       current: currentInstallation,
       stored: storedInstallation,
@@ -440,12 +512,17 @@ export const createRepositoryCaptureService = (
       );
       const repositoryApiPath =
         `/repos/${requestedRepository.owner}/${requestedRepository.name}`;
-      const resolvedRepository = await discoveryClient.request<{
-        full_name: string;
-        html_url: string;
-        id: number;
-        visibility: "internal" | "private" | "public";
-      }>(repositoryApiPath);
+      const resolvedRepository = await mapGitHubRequest(
+        () =>
+          discoveryClient!.request<{
+            full_name: string;
+            html_url: string;
+            id: number;
+            visibility: "internal" | "private" | "public";
+          }>(repositoryApiPath),
+        "repository_access_denied",
+        "The GitHub App installation cannot access the requested repository.",
+      );
       const canonicalRepository = parseGitHubRepository(
         resolvedRepository.html_url,
       );
@@ -458,36 +535,49 @@ export const createRepositoryCaptureService = (
         !Number.isSafeInteger(resolvedRepository.id) ||
         resolvedRepository.id <= 0
       ) {
-        throw new Error(
+        throw new RepositoryCaptureError(
+          "repository_identity_mismatch",
           "GitHub returned repository identity that does not match the requested repository.",
         );
       }
 
-      const baseRef = await discoveryClient.request<{
-        object: { sha: string; type: string };
-      }>(
-        `${repositoryApiPath}/git/ref/heads/${encodeURIComponent(input.baseBranch)}`,
+      const baseRef = await mapGitHubRequest(
+        () =>
+          discoveryClient!.request<{
+            object: { sha: string; type: string };
+          }>(
+            `${repositoryApiPath}/git/ref/heads/${encodeURIComponent(input.baseBranch)}`,
+          ),
+        "base_ref_mismatch",
+        "The requested repository base ref is unavailable.",
       );
 
       if (
         baseRef.object.type !== "commit" ||
         baseRef.object.sha !== input.baseSha
       ) {
-        throw new Error(
+        throw new RepositoryCaptureError(
+          "base_ref_mismatch",
           "The repository base branch does not point to the requested immutable SHA.",
         );
       }
 
-      const commit = await discoveryClient.request<{
-        sha: string;
-        tree: { sha: string };
-      }>(`${repositoryApiPath}/git/commits/${input.baseSha}`);
+      const commit = await mapGitHubRequest(
+        () =>
+          discoveryClient!.request<{
+            sha: string;
+            tree: { sha: string };
+          }>(`${repositoryApiPath}/git/commits/${input.baseSha}`),
+        "commit_tree_mismatch",
+        "The requested repository commit is unavailable.",
+      );
 
       if (
         commit.sha !== input.baseSha ||
         !/^[0-9a-f]{40}$/u.test(commit.tree.sha)
       ) {
-        throw new Error(
+        throw new RepositoryCaptureError(
+          "commit_tree_mismatch",
           "GitHub did not return the requested commit and tree identity.",
         );
       }

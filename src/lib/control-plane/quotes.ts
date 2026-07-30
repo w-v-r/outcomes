@@ -21,7 +21,12 @@ import {
 import { analyzeTask } from "@/lib/pricing/task-analysis";
 
 import { ControlPlaneError } from "./errors";
-import { type CreateQuoteInput } from "./schemas";
+import {
+  createQuoteInputSchema,
+  type CreateQuoteInput,
+  type LegacyQuoteInput,
+} from "./schemas";
+import { createSnapshotQuote } from "./snapshot-quotes";
 
 type QuoteRow = {
   amount_cents: number;
@@ -35,6 +40,7 @@ type QuoteRow = {
   expires_at: string;
   id: string;
   pricing_model_version: string;
+  repository_binding_id: string | null;
   repository_sha: string;
   repository_url: string;
   request_id: string;
@@ -55,14 +61,14 @@ export type CustomerQuote = {
   replayed: boolean;
   repository_sha: string;
   repository_url: string;
-  status: "accepted" | "pending" | "rejected";
+  status: "accepted" | "expired" | "pending" | "rejected";
   task: CreateQuoteInput["task"];
   task_id: string | null;
   terms: string;
 };
 
 const QUOTE_SELECT =
-  "id, request_id, repository_url, repository_sha, task_spec, eligibility_decision, amount_cents, currency, terms, pricing_model_version, status, expires_at, contract_hash, task_id";
+  "id, request_id, repository_binding_id, repository_url, repository_sha, task_spec, eligibility_decision, amount_cents, currency, terms, pricing_model_version, status, expires_at, contract_hash, task_id";
 
 const requireAdminClient = () => {
   const supabase = createAdminClient();
@@ -95,9 +101,11 @@ const projectQuote = (
   status:
     row.status === "approved"
       ? "accepted"
-      : row.status === "rejected"
-        ? "rejected"
-        : "pending",
+      : row.status === "expired"
+        ? "expired"
+        : row.status === "rejected"
+          ? "rejected"
+          : "pending",
   task: row.task_spec,
   task_id: row.task_id,
   terms: row.terms,
@@ -127,9 +135,10 @@ const getExistingQuote = async (
 
 const replayExistingQuote = (
   existingQuote: QuoteRow,
-  input: CreateQuoteInput,
+  input: LegacyQuoteInput,
 ) => {
   const sameRequest =
+    existingQuote.repository_binding_id === null &&
     existingQuote.repository_url ===
       (normalizeGitHubRepositoryUrl(input.repository_url) ??
         input.repository_url) &&
@@ -149,9 +158,9 @@ const replayExistingQuote = (
   return projectQuote(existingQuote, true);
 };
 
-export const createQuote = async (
+const createLegacyQuote = async (
   principal: CustomerPrincipal,
-  input: CreateQuoteInput,
+  input: LegacyQuoteInput,
 ): Promise<CustomerQuote> => {
   const existingQuote = await getExistingQuote(
     principal.userId,
@@ -314,4 +323,27 @@ export const createQuote = async (
   }
 
   return projectQuote(quoteRow, false);
+};
+
+export const createQuote = async (
+  principal: CustomerPrincipal,
+  input: CreateQuoteInput,
+) => {
+  const parsedInput = createQuoteInputSchema.safeParse(input);
+
+  if (!parsedInput.success) {
+    throw new ControlPlaneError({
+      code: "invalid_request",
+      message: "The quote request is invalid.",
+      status: 400,
+    });
+  }
+
+  const validatedInput = parsedInput.data;
+
+  if ("repository_binding_id" in validatedInput) {
+    return createSnapshotQuote(principal, validatedInput);
+  }
+
+  return createLegacyQuote(principal, validatedInput);
 };

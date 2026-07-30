@@ -35,7 +35,10 @@ export const createContractHash = (contract: {
   amountCents: number;
   currency: "AUD";
   expiresAt: string;
+  pricingEvidence?: unknown;
+  pricingEvidenceHash?: string;
   pricingModelVersion: string;
+  repositoryEvidence?: unknown;
   repositorySha: string;
   repositoryUrl: string;
   task: TaskContract;

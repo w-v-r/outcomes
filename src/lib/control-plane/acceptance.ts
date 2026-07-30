@@ -5,6 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CursorCloudWorkerAdapter } from "@/lib/workers/cursor/adapter";
 import { type WorkerAdapter } from "@/lib/workers/types";
 
+import {
+  requireAcceptedTaskId,
+  type AcceptanceRpcResult,
+} from "./acceptance-result";
 import { ControlPlaneError } from "./errors";
 import { appendTaskEvent } from "./events";
 import { type AcceptQuoteInput } from "./schemas";
@@ -90,17 +94,10 @@ export const acceptQuoteAndStart = async (
     });
   }
 
-  const acceptedTaskId = (
-    acceptanceRows as Array<{ task_id: string }> | null
-  )?.[0]?.task_id;
-
-  if (!acceptedTaskId) {
-    throw new ControlPlaneError({
-      code: "database_error",
-      message: "The accepted task could not be loaded.",
-      status: 500,
-    });
-  }
+  const acceptanceResult = (
+    acceptanceRows as AcceptanceRpcResult[] | null
+  )?.[0];
+  const acceptedTaskId = requireAcceptedTaskId(acceptanceResult);
 
   const { data: taskData, error: taskError } = await supabase
     .from("tasks")

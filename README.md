@@ -173,12 +173,40 @@ The current quote is AUD 12.50 in sandbox mode. Outcomes rejects other
 repositories, commits, and task contracts; this is an intentional MVP safety
 boundary rather than a general coding-agent service.
 
+### Task 2 implementation status
+
+The codebase now also contains snapshot-backed repository discovery, preflight,
+assessment, and variable quote services. New quote contracts use an immutable
+`repository_binding_id`; planning assessments can analyze broader repositories
+while executable quotes remain on the fixture allowlist. The policy is
+explicitly uncalibrated and separates customer-safe factors from internal
+worker, analysis, verification, retry/risk, payment, margin, and minimum-price
+underwriting.
+
+Only estimator `accept` and customer-visible `accept_with_conditions` decisions
+can become pending binding-backed quotes. `decompose` and `decline` remain
+rejected at both the service and database acceptance boundaries.
+Snapshot quote and underwriting persistence is atomic, acceptance requires the
+matching underwriting evidence, and customer DTOs return the non-recursive
+pricing evidence hash committed into each contract. Internal assessment rows
+are service-only and are not directly readable through the authenticated
+Supabase Data API. MCP advertises only the canonical binding-backed quote
+shape; REST alone retains fixture URL/SHA compatibility.
+
+This code and `20260730151707_quote_repository_evidence.sql` pass a full
+isolated local Supabase Postgres 17 migration replay, transactional database
+assertions, and database lint. The migration has not been applied to
+production, and the new endpoints are not included in the live claims above.
+
 ## REST API
 
 MCP is the recommended agent integration. The same lifecycle is available over
 REST:
 
 ```text
+GET  /api/v1/repositories/installations
+POST /api/v1/repository-bindings
+POST /api/v1/assessments
 POST /api/v1/quotes
 POST /api/v1/quotes/:quoteId/accept
 GET  /api/v1/tasks/:taskId
@@ -274,8 +302,9 @@ installation, verifies the immutable GitHub repository ID and exact
 branch/commit/tree identity, scans an exact-SHA ephemeral checkout without
 executing repository code, and persists a deterministic manifest plus immutable
 repository binding. Snapshot and binding writes are service-only; authenticated
-users may read only their own records. This foundation is not yet wired into
-quote creation, which remains fixture-only.
+users may read only their own records. Task 2 wires that evidence into REST
+preflight, non-binding assessment, and a snapshot-backed quote path while
+retaining fixture-only execution eligibility.
 
 Run the read-only repository and pinned-ref preflight first:
 

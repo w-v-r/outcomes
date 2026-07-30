@@ -276,11 +276,13 @@ describe("repository capture preflight", () => {
     branchSha = COMMIT_SHA,
     cleanupFailure = false,
     installationAvailable = true,
+    installationPermissionsValid = true,
     revokeFailure = false,
   }: {
     branchSha?: string;
     cleanupFailure?: boolean;
     installationAvailable?: boolean;
+    installationPermissionsValid?: boolean;
     revokeFailure?: boolean;
   } = {}) => {
     const rootPath = await createRepositoryDirectory();
@@ -302,7 +304,7 @@ describe("repository capture preflight", () => {
       appSlug: "outcomes-test",
       installationId: 987,
       permissions: {
-        contents: "write",
+        contents: installationPermissionsValid ? "write" : "read",
         pull_requests: "write",
       },
       repositorySelection: "selected" as const,
@@ -316,7 +318,7 @@ describe("repository capture preflight", () => {
             id: INSTALLATION_ROW_ID,
             installationId: 987,
             permissions: {
-              contents: "write",
+              contents: installationPermissionsValid ? "write" : "read",
               pull_requests: "write",
             },
             suspendedAt: null,
@@ -462,9 +464,9 @@ describe("repository capture preflight", () => {
       branchSha: "f".repeat(40),
     });
 
-    await expect(harness.capture(captureInput)).rejects.toThrow(
-      "does not point to the requested",
-    );
+    await expect(harness.capture(captureInput)).rejects.toMatchObject({
+      code: "base_ref_mismatch",
+    });
     expect(harness.persistenceOrder).toEqual([]);
     expect(harness.tokenPurposes).toEqual(["discover"]);
     expect(harness.revokedTokens).toEqual(["discover-token"]);
@@ -514,9 +516,21 @@ describe("repository capture preflight", () => {
       installationAvailable: false,
     });
 
-    await expect(harness.capture(captureInput)).rejects.toThrow(
-      "does not belong",
-    );
+    await expect(harness.capture(captureInput)).rejects.toMatchObject({
+      code: "installation_not_owned",
+    });
+    expect(harness.tokenPurposes).toEqual([]);
+  });
+
+  test("rejects insufficient installation permissions with a typed error", async () => {
+    const harness = await createCaptureHarness({
+      installationPermissionsValid: false,
+    });
+
+    await expect(harness.capture(captureInput)).rejects.toMatchObject({
+      code: "installation_permissions_invalid",
+    });
+    expect(harness.getInstallation).not.toHaveBeenCalled();
     expect(harness.tokenPurposes).toEqual([]);
   });
 });

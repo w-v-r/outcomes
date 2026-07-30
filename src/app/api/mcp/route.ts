@@ -10,7 +10,7 @@ import { ControlPlaneError } from "@/lib/control-plane/errors";
 import { createQuote } from "@/lib/control-plane/quotes";
 import {
   acceptQuoteInputSchema,
-  createQuoteInputSchema,
+  bindingQuoteInputShape,
 } from "@/lib/control-plane/schemas";
 import { getTaskStatus } from "@/lib/control-plane/tasks";
 
@@ -74,8 +74,8 @@ const handler = createMcpHandler(
       "quote_task",
       {
         description:
-          "Create an immutable fixed-price quote for a coding outcome. Before calling: resolve the current repository's GitHub remote URL and exact 40-character HEAD commit SHA; confirm HEAD is pushed and the worktree has no uncommitted changes; ask the user to create and push a GitHub repository if no GitHub remote exists; and turn the request into a bounded contract with a description, acceptance criteria, and prohibited changes. After calling, present the exact price and complete contract to the user. Do not call accept_quote_and_start without their explicit approval. This hackathon release currently accepts only its pinned calculator fixture and rejects other repositories or contracts safely.",
-        inputSchema: createQuoteInputSchema.shape,
+          "Create an immutable fixed-price quote for a coding outcome using a repository_binding_id returned by repository preflight. Repository identity and pricing are resolved by the Outcomes service; do not calculate pricing locally or supply commands to run at quote time. After calling, present the exact price and complete contract. Do not call accept_quote_and_start without explicit approval. Execution remains fail-closed to allowlisted repository and task contracts.",
+        inputSchema: bindingQuoteInputShape,
         title: "Quote task",
       },
       async (input, extra) => {

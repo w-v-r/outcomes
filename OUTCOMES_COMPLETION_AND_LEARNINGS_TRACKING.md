@@ -562,3 +562,61 @@ Status: **implemented, locally verified, and migrated in production**.
   `FIXTURE_MANIFEST`; pricing expansion is the next slice.
 - The new capture service is not yet exposed as a REST, MCP, or CLI operation.
 
+## 31 July 2026 — Task 2 snapshot-backed pricing
+
+Status: **implemented and verified against an isolated local Postgres 17
+replay; production migration not applied**.
+
+### Implemented
+
+- Added API-key-authenticated REST discovery for active GitHub App installation
+  generations and repository preflight/capture. Ownership comes only from the
+  authenticated principal, and DTOs omit tokens and secrets.
+- Added a shared owned-evidence loader that reconstructs strict
+  `RepositoryBinding` and `RepositorySnapshot` contracts from persistence and
+  rejects mismatched IDs, URLs, SHAs, repository IDs, or manifest hashes.
+- Added binding-backed quote creation that analyzes only the persisted
+  `snapshot.manifest`. The prior URL/SHA fixture request remains isolated as a
+  compatibility path.
+- Added non-binding `assessTask` and `POST /api/v1/assessments`, including
+  optional Linear workspace/team/project/issue metadata and a required
+  caller-supplied normalized issue-content SHA-256. Assessments cannot be
+  accepted.
+- Separated semantic assessment safety from execution allowlisting.
+  Non-allowlisted repositories can receive planning assessments, but executable
+  quote eligibility remains fail-closed to the pinned fixture contract.
+- Replaced the new path's blanket price with an uncalibrated, versioned variable
+  policy. Internal evidence itemizes predicted worker high cost, quote analysis,
+  verification, retry/risk, payment, margin, and commercial minimum coverage;
+  customer DTOs contain only range, confidence, caveat, and safe factors.
+- Extended quote contract hashing, replay identity, underwriting, accepted
+  tasks, and acceptance events with binding, snapshot, manifest, repository,
+  and pricing-policy evidence.
+- Added an imperative migration for assessments, composite ownership foreign
+  keys, RLS, explicit grants, immutable evidence triggers, and acceptance-time
+  repository evidence copying.
+- Follow-up hardening made assessment rows service-only, made snapshot quote
+  and underwriting creation atomic, required matching underwriting at
+  acceptance, returned persisted pricing evidence hashes, bounded internal
+  analysis IDs, made expiry durable, narrowed MCP to binding-only input, and
+  replaced preflight message matching with typed errors.
+
+### Verification and limits
+
+- Deterministic tests cover differing manifests/prices, actual snapshot-manifest
+  use, non-allowlisted assessment versus quote rejection, semantic declines,
+  source hashing, idempotency conflicts, owner-derived access, contract-hash
+  changes, and migration invariants.
+- No repository commands are run during quote analysis, and no installation
+  token or internal underwriting amounts are returned in customer DTOs.
+- The full migration history, including the new migration, replayed on an
+  isolated local Supabase Postgres 17 stack. Transactional assertions verified
+  atomic quote/underwriting creation and replay, accepted-task evidence copying,
+  immutable underwriting, service-only assessment access, and RPC grants.
+  Database lint reported no public-schema errors.
+- The new migration was not applied remotely in this change. No production
+  endpoint or live GitHub capture was verified.
+- Structured model-assisted classification, calibration runs, additional
+  executable verifier profiles, generalized worker prompts/task titles, and
+  CLI/MCP assessment parity remain future work.
+
