@@ -752,8 +752,9 @@ The Task 2 migration replays on an isolated local Supabase Postgres 17 stack.
 Transactional assertions verify atomic quote/underwriting persistence and
 replay, acceptance evidence copying, immutable underwriting, service-only
 assessment access, and RPC grants; database lint reports no public-schema
-errors. The migration was not applied remotely, and no new endpoint was
-live-verified in this slice.
+errors. The migration was applied to the linked production Supabase project;
+remote migration history and service-role Data API access to the pricing
+evidence tables were verified. No new endpoint was live-verified in this slice.
 
 ### Milestone 3 — Generalize narrow execution and verification
 

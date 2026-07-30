@@ -187,5 +187,6 @@ contain a local pricing implementation.
 
 This Task 2 implementation has deterministic tests and an isolated local
 Supabase Postgres 17 migration replay with transactional access/evidence
-assertions. Its new migration was not applied to production and the new REST
-surfaces were not live-verified as part of this change.
+assertions. Its new migration is applied to production and the remote evidence
+tables are queryable through the service-role Data API. The new REST surfaces
+were not live-verified as part of this change.

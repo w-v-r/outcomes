@@ -195,8 +195,9 @@ shape; REST alone retains fixture URL/SHA compatibility.
 
 This code and `20260730151707_quote_repository_evidence.sql` pass a full
 isolated local Supabase Postgres 17 migration replay, transactional database
-assertions, and database lint. The migration has not been applied to
-production, and the new endpoints are not included in the live claims above.
+assertions, and database lint. The migration is applied to production, with
+remote history and service-role Data API access verified. The new endpoints
+are not yet included in the live workflow claims above.
 
 ## REST API
 

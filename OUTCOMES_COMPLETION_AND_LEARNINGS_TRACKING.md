@@ -564,8 +564,8 @@ Status: **implemented, locally verified, and migrated in production**.
 
 ## 31 July 2026 — Task 2 snapshot-backed pricing
 
-Status: **implemented and verified against an isolated local Postgres 17
-replay; production migration not applied**.
+Status: **implemented, verified against an isolated local Postgres 17 replay,
+and migrated in production**.
 
 ### Implemented
 
@@ -614,8 +614,10 @@ replay; production migration not applied**.
   atomic quote/underwriting creation and replay, accepted-task evidence copying,
   immutable underwriting, service-only assessment access, and RPC grants.
   Database lint reported no public-schema errors.
-- The new migration was not applied remotely in this change. No production
-  endpoint or live GitHub capture was verified.
+- The migration was applied to the linked production Supabase project. Remote
+  migration history and service-role Data API access to `assessments`,
+  `quotes`, and `quote_underwriting` were verified after application.
+- No production endpoint or live GitHub capture was verified in this slice.
 - Structured model-assisted classification, calibration runs, additional
   executable verifier profiles, generalized worker prompts/task titles, and
   CLI/MCP assessment parity remain future work.
