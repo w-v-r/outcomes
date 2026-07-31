@@ -29,6 +29,15 @@ const buildIsolatedPrompt = (prompt: string): string =>
     prompt,
   ].join("\n");
 
+const shouldEnableLocalSandbox = (): boolean => {
+  if (process.env.OUTCOMES_CURSOR_SANDBOX === "0") {
+    return false;
+  }
+
+  // Vercel serverless does not support the Cursor local sandbox runtime.
+  return process.env.VERCEL !== "1";
+};
+
 export const executeIsolatedCursorRun = async ({
   apiKey,
   input,
@@ -42,7 +51,7 @@ export const executeIsolatedCursorRun = async ({
     local: {
       autoReview: true,
       cwd: input.workspaceDirectory,
-      sandboxOptions: { enabled: true },
+      sandboxOptions: { enabled: shouldEnableLocalSandbox() },
       settingSources: [],
     },
     mcpServers: {},
