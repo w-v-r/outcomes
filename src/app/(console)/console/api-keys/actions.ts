@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getAuthenticatedUser } from "@/lib/auth/get-authenticated-user";
 import {
   createCustomerApiKey,
   revokeCustomerApiKey,
 } from "@/lib/api-keys/service";
+import { getAuthenticatedUser } from "@/lib/auth/get-authenticated-user";
 
 export type ApiKeyActionState = {
   createdKey: string | null;
@@ -38,11 +38,11 @@ export const createApiKeyAction = async (
       userId: user.id,
     });
 
-    revalidatePath("/dashboard");
+    revalidatePath("/console/api-keys");
 
     return {
       createdKey: apiKey.value,
-      message: "API key created. Copy it now; it will not be shown again.",
+      message: "Copy this key now. It will not be shown again.",
       status: "success",
     };
   } catch (error) {
@@ -77,7 +77,7 @@ export const revokeApiKeyAction = async (
       apiKeyId,
       userId: user.id,
     });
-    revalidatePath("/dashboard");
+    revalidatePath("/console/api-keys");
 
     return {
       createdKey: null,

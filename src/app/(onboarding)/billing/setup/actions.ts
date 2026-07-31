@@ -133,7 +133,7 @@ export const completeSandboxBillingSetup = async (
   }
 
   if (existingBillingAccount?.status === "ready") {
-    redirect("/dashboard");
+    redirect("/console");
   }
 
   try {
@@ -221,5 +221,5 @@ export const completeSandboxBillingSetup = async (
     };
   }
 
-  redirect("/dashboard");
+  redirect("/console");
 };

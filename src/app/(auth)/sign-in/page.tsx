@@ -24,7 +24,7 @@ const SignInPage = async ({ searchParams }: SignInPageProps) => {
   ]);
 
   if (user) {
-    redirect("/dashboard");
+    redirect("/console");
   }
 
   const hasCallbackError = Boolean(query.error);

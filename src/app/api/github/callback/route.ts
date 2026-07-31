@@ -20,7 +20,7 @@ const parseInstallationId = (value: string | null): number | null => {
 const redirectWithResult = ({
   request,
   result,
-  returnTo = "/dashboard",
+  returnTo = "/console",
 }: {
   request: NextRequest;
   result: "connected" | "error";
@@ -49,7 +49,7 @@ export const GET = async (request: NextRequest) => {
   }
 
   const config = getGitHubAppConfig();
-  let returnTo = "/dashboard";
+  let returnTo = "/console";
 
   try {
     const verifiedState = verifyGitHubInstallationState({

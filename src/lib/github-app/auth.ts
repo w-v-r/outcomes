@@ -61,7 +61,7 @@ const isSafeReturnPath = (value: string): boolean =>
 
 export const createGitHubInstallationState = ({
   now = new Date(),
-  returnTo = "/dashboard",
+  returnTo = "/console",
   secret,
   userId,
 }: {
