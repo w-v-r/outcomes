@@ -20,14 +20,27 @@ export const createIsolatedWorkerEnvironment = ({
   pathValue: string;
   rootDirectory: string;
   workerHome: string;
-}): NodeJS.ProcessEnv => ({
-  HOME: workerHome,
-  LANG: "C.UTF-8",
-  NODE_ENV: nodeEnvironment,
-  PATH: pathValue,
-  TERM: "dumb",
-  TMPDIR: rootDirectory,
-});
+}): NodeJS.ProcessEnv => {
+  const environment: NodeJS.ProcessEnv = {
+    HOME: workerHome,
+    LANG: "C.UTF-8",
+    NODE_ENV: nodeEnvironment,
+    PATH: pathValue,
+    TERM: "dumb",
+    TMPDIR: rootDirectory,
+  };
+
+  // Propagate only the sandbox policy signals the child needs. Do not forward
+  // credentials or ambient shell configuration into the worker process.
+  if (process.env.VERCEL) {
+    environment.VERCEL = process.env.VERCEL;
+  }
+  if (process.env.OUTCOMES_CURSOR_SANDBOX) {
+    environment.OUTCOMES_CURSOR_SANDBOX = process.env.OUTCOMES_CURSOR_SANDBOX;
+  }
+
+  return environment;
+};
 
 const runWorkerProcess = async ({
   apiKey,

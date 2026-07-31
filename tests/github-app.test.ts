@@ -380,28 +380,48 @@ describe("isolated workspace validation", () => {
   });
 
   test("constructs a minimal worker environment without ambient credentials", () => {
-    const environment = createIsolatedWorkerEnvironment({
-      nodeEnvironment: "test",
-      pathValue: "/usr/bin:/bin",
-      rootDirectory: "/tmp/outcomes-worker",
-      workerHome: "/tmp/outcomes-worker/home",
-    });
+    const previousVercel = process.env.VERCEL;
+    const previousSandbox = process.env.OUTCOMES_CURSOR_SANDBOX;
+    process.env.VERCEL = "1";
+    process.env.OUTCOMES_CURSOR_SANDBOX = "0";
 
-    expect(environment).toEqual({
-      HOME: "/tmp/outcomes-worker/home",
-      LANG: "C.UTF-8",
-      NODE_ENV: "test",
-      PATH: "/usr/bin:/bin",
-      TERM: "dumb",
-      TMPDIR: "/tmp/outcomes-worker",
-    });
-    expect(environment).not.toHaveProperty("CURSOR_API_KEY");
-    expect(environment).not.toHaveProperty(
-      "OUTCOMES_GITHUB_INSTALLATION_TOKEN",
-    );
-    expect(environment).not.toHaveProperty(
-      "OUTCOMES_GITHUB_APP_PRIVATE_KEY",
-    );
+    try {
+      const environment = createIsolatedWorkerEnvironment({
+        nodeEnvironment: "test",
+        pathValue: "/usr/bin:/bin",
+        rootDirectory: "/tmp/outcomes-worker",
+        workerHome: "/tmp/outcomes-worker/home",
+      });
+
+      expect(environment).toEqual({
+        HOME: "/tmp/outcomes-worker/home",
+        LANG: "C.UTF-8",
+        NODE_ENV: "test",
+        OUTCOMES_CURSOR_SANDBOX: "0",
+        PATH: "/usr/bin:/bin",
+        TERM: "dumb",
+        TMPDIR: "/tmp/outcomes-worker",
+        VERCEL: "1",
+      });
+      expect(environment).not.toHaveProperty("CURSOR_API_KEY");
+      expect(environment).not.toHaveProperty(
+        "OUTCOMES_GITHUB_INSTALLATION_TOKEN",
+      );
+      expect(environment).not.toHaveProperty(
+        "OUTCOMES_GITHUB_APP_PRIVATE_KEY",
+      );
+    } finally {
+      if (previousVercel === undefined) {
+        delete process.env.VERCEL;
+      } else {
+        process.env.VERCEL = previousVercel;
+      }
+      if (previousSandbox === undefined) {
+        delete process.env.OUTCOMES_CURSOR_SANDBOX;
+      } else {
+        process.env.OUTCOMES_CURSOR_SANDBOX = previousSandbox;
+      }
+    }
   });
 
   test("rejects workflow and dependency publication scopes before execution", async () => {
