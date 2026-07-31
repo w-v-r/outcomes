@@ -4,6 +4,10 @@ Outcomes gives coding agents a fixed-price task contract, runs the work, verifie
 the result independently, accrues only verified work, and batch-charges the
 customer when their outstanding balance reaches AUD $10.
 
+Detailed billing behavior, state transitions, concurrency guarantees, and
+operations are documented in
+[`documentation/BILLING.md`](documentation/BILLING.md).
+
 ## Install the hosted MCP
 
 The Outcomes MCP is hosted. You do not need to clone this repository or install
