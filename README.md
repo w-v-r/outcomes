@@ -266,42 +266,41 @@ backfills approved binding-backed tasks without run evidence to
 that already reached `starting` or `executing` continue through the prior cloud
 lifecycle, but no newly approved binding-backed task is started on Cloud.
 
-The Vercel route is an explicitly bounded hackathon runner: its Node child is
-capped at eight minutes inside an 800-second route, and tracing includes the
-worker script, its direct `cursor-run.ts` dependency, the Cursor SDK, and `tsx`.
-The deployment still requires a usable `git`
-executable, writable temporary storage, child-process support, and enough
-memory. These are not generalized production sandbox guarantees; use
-`npm run tasks:reconcile -- --batch 1` on a controlled local/external worker
-when the hosting runtime cannot provide them. Cursor usage is persisted, but
-the current local SDK result does not expose authoritative provider cost, so
-`actual_cost_usd_micros` remains `null` rather than estimated. The Task 4
-migration is applied to production and its schema is queryable. Only validated
-change/run evidence is durable; the local checkout is ephemeral and cannot
-resume an interrupted Cursor process. A durable external worker and globally
-fenced payment lease remain post-hackathon production hardening.
+The Vercel route is a bounded hackathon runner: its Node child is capped at
+eight minutes inside an 800-second route, and tracing includes the bundled
+worker entrypoint plus the Cursor SDK. Execution uses GitHub archive checkout
+and filesystem diffing, so it does not require a system `git` executable.
+Cursor local sandboxing is disabled on Vercel; process isolation, a minimal
+child environment, credential separation, and publish-time allowlisted
+validation remain. Cursor usage is persisted, but the current local SDK result
+does not expose authoritative provider cost, so `actual_cost_usd_micros`
+remains `null` rather than estimated. Only validated change/run evidence is
+durable; the local checkout is ephemeral and cannot resume an interrupted
+Cursor process. A dedicated external worker and globally fenced payment lease
+remain post-hackathon production hardening.
 
-#### Live developer-flow verification — 31 July 2026
+#### Live production paid-flow verification — 31 July 2026
 
-The production API and local controlled worker completed the core flow against
-the private `outcomes-test-org/real-work` repository:
+Production Vercel cron completed the full capture → quote → accept → worker →
+verify → Pinch charge path against private `outcomes-test-org/real-work`
+without a laptop reconciler:
 
-- production CLI preflight captured the exact `main` SHA and reproduced the
-  existing deterministic manifest hash;
-- a bounded README task received a variable AUD 6.75 executable quote;
-- explicit contract-hash acceptance created one durable isolated execution;
-- the local reconciler claimed it once, Cursor completed the change, and the
-  GitHub App publisher opened
-  [draft PR #2](https://github.com/outcomes-test-org/real-work/pull/2);
-- the PR is pinned to the quoted base and changes only `README.md`; the worker
-  never received the GitHub installation credential.
+- binding capture reused the pinned `main` SHA and deterministic manifest;
+- a bounded README task quoted at AUD 7.00 and was accepted by contract hash;
+- Vercel cron claimed task `411d4867-9bf0-41e3-9e0c-b6dd1a4b039e` once;
+- the isolated Cursor worker and GitHub App publisher opened
+  [draft PR #3](https://github.com/outcomes-test-org/real-work/pull/3)
+  changing only `README.md`;
+- the repository-owned `outcomes-verify.yml` workflow passed
+  ([run 30600043218](https://github.com/outcomes-test-org/real-work/actions/runs/30600043218));
+- Pinch test realtime approved payment `pmt_KXxOFFTvrz5y2f` for AUD 7.00 and
+  the task reached `completed`.
 
-Verification and charging were intentionally not claimed as successful:
-`real-work` does not yet contain the trusted verifier workflow, so the task
-ended `verification_failed` with no payment row. The suggested
-`w-v-r/search-harness` pricing check also requires installing the Outcomes
-GitHub App on the `w-v-r` account; the current installation covers only
-`outcomes-test-org`.
+`outcomes-verify.yml` remains the independent trust boundary: Outcomes dispatches
+it with only baseline SHA, result ref, and task ID; the repository decides which
+path/test policy must pass before charge. Binding-backed verification uses a
+short-lived GitHub App installation token, not an Outcomes personal PAT. This
+build remains locked to Pinch `test` mode and does not move live bank funds.
 
 ## REST API
 
@@ -426,11 +425,14 @@ Register one GitHub App owned by Outcomes with:
 - Callback URL: `<NEXT_PUBLIC_APP_URL>/api/github/callback`
 - Request user authorization during installation: enabled
 - Repository permissions:
-  - Actions: read and write
+  - Actions: read and write (required to dispatch the customer verifier workflow)
   - Contents: read and write
   - Pull requests: read and write
 - Installation scope: any account, with customers encouraged to select only
   the repositories they want Outcomes to use
+- Customer repositories that should reach payment must contain a trusted
+  `.github/workflows/outcomes-verify.yml` with the Outcomes `workflow_dispatch`
+  inputs and `run-name: Verify Outcomes task ${{ inputs.task_id }}`
 
 Do not configure a Setup URL when OAuth during installation is enabled. Set the
 six `OUTCOMES_GITHUB_APP_*` variables from [.env.example](./.env.example), then
