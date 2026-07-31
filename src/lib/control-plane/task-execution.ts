@@ -763,6 +763,29 @@ const assertAcceptedEvidence = (
   }
 };
 
+const PROHIBITED_EXECUTION_PATH_PREFIXES = [
+  ".agents/",
+  ".cursor/",
+  ".git/",
+  ".github/workflows/",
+  ".githooks/",
+] as const;
+
+const isProhibitedExecutionPath = (value: string): boolean =>
+  PROHIBITED_EXECUTION_PATH_PREFIXES.some((prefix) =>
+    value.startsWith(prefix),
+  ) ||
+  [
+    ".gitmodules",
+    "bun.lock",
+    "bun.lockb",
+    "npm-shrinkwrap.json",
+    "package-lock.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+  ].includes(value);
+
 const deriveAllowedPaths = (
   evidence: TaskExecutionEvidence,
 ): string[] => {
@@ -781,7 +804,11 @@ const deriveAllowedPaths = (
   const allowedPaths = [...new Set(likelyPaths)].filter((path) => {
     const file = manifestFiles.get(path);
 
-    if (!file || !["source", "documentation"].includes(file.category)) {
+    if (
+      !file ||
+      isProhibitedExecutionPath(path) ||
+      !["source", "documentation"].includes(file.category)
+    ) {
       return false;
     }
 
