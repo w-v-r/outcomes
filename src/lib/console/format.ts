@@ -5,7 +5,9 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "Completed",
   executing: "In progress",
   failed: "Failed",
+  paid: "Paid",
   payment_failed: "Payment failed",
+  payment_in_progress: "Payment in progress",
   quoted: "Quoted",
   starting: "Starting",
   verified: "Verified",
@@ -13,6 +15,7 @@ const STATUS_LABELS: Record<string, string> = {
   verifying: "Verifying",
   worker_failed: "Worker failed",
   worker_succeeded: "Worker complete",
+  unpaid: "Unpaid",
 };
 
 export const formatCurrency = (
@@ -48,7 +51,9 @@ export const formatStatus = (status: string) => {
 };
 
 export const getStatusTone = (status: string) => {
-  if (["completed", "settled", "approved", "ready"].includes(status)) {
+  if (
+    ["completed", "settled", "approved", "ready", "paid"].includes(status)
+  ) {
     return "success";
   }
 
@@ -66,9 +71,14 @@ export const getStatusTone = (status: string) => {
   }
 
   if (
-    ["executing", "starting", "verifying", "charging", "pending"].includes(
-      status,
-    )
+    [
+      "executing",
+      "starting",
+      "verifying",
+      "charging",
+      "pending",
+      "payment_in_progress",
+    ].includes(status)
   ) {
     return "active";
   }

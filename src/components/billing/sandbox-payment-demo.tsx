@@ -4,8 +4,9 @@ import { useActionState } from "react";
 
 import {
   approveSandboxDemoQuote,
-  completeAndChargeSandboxTask,
+  completeAndAccrueSandboxTask,
   createSandboxDemoQuote,
+  settleSandboxBalance,
   type DemoActionState,
 } from "@/app/(console)/dashboard/payment-actions";
 
@@ -52,15 +53,21 @@ export const SandboxPaymentDemo = ({
     initialState,
   );
   const [completeState, completeAction, isCompleting] = useActionState(
-    completeAndChargeSandboxTask,
+    completeAndAccrueSandboxTask,
+    initialState,
+  );
+  const [settleState, settleAction, isSettling] = useActionState(
+    settleSandboxBalance,
     initialState,
   );
   const actionState =
-    completeState.message !== null
-      ? completeState
-      : approveState.message !== null
-        ? approveState
-        : createState;
+    settleState.message !== null
+      ? settleState
+      : completeState.message !== null
+        ? completeState
+        : approveState.message !== null
+          ? approveState
+          : createState;
 
   if (!task || !quote) {
     return (
@@ -169,7 +176,7 @@ export const SandboxPaymentDemo = ({
           </div>
           <p className="mt-5 text-sm leading-relaxed text-paper/50">
             One control simulates worker completion, verifies the acceptance
-            criteria, and calls the same billing service future agents will use.
+            criteria, and accrues the approved quote without calling Pinch.
           </p>
           {quoteApproved && !taskCompleted ? (
             <form action={completeAction} className="mt-7">
@@ -180,8 +187,8 @@ export const SandboxPaymentDemo = ({
                 type="submit"
               >
                 {isCompleting
-                  ? "Verifying and charging…"
-                  : "Complete, verify, and charge"}
+                  ? "Verifying and accruing…"
+                  : "Complete, verify, and accrue"}
               </button>
             </form>
           ) : (
@@ -201,15 +208,26 @@ export const SandboxPaymentDemo = ({
             </span>
           </div>
           <p className="mt-5 text-sm leading-relaxed text-paper/50">
-            A deterministic nonce and one-payment-per-task database constraint
-            prevent duplicate submissions.
+            Settlement atomically claims unpaid tasks once the balance reaches
+            $10. One deterministic batch nonce prevents duplicate submissions.
           </p>
+          {taskCompleted ? (
+            <form action={settleAction} className="mt-7">
+              <button
+                className="inline-flex min-h-10 w-full items-center justify-center border border-cobalt bg-cobalt/10 px-4 py-2 text-sm text-paper transition-colors hover:bg-cobalt hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cobalt disabled:cursor-wait disabled:opacity-60"
+                disabled={isSettling}
+                type="submit"
+              >
+                {isSettling ? "Settling balance…" : "Settle eligible balance"}
+              </button>
+            </form>
+          ) : null}
           <div className="mt-7 border-t border-paper/10 pt-5">
             <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-paper/30">
               Pinch payment ID
             </p>
             <p className="mt-2 break-all font-mono text-[11px] text-paper/65">
-              {payment?.providerPaymentId ?? "Created after verification"}
+              {payment?.providerPaymentId ?? "Created by settlement"}
             </p>
           </div>
         </div>

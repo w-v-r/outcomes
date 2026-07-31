@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from "node:crypto";
+
 const LOCAL_ENV_PATH = ".env";
 const PINCH_AUTH_URL = "https://auth.getpinch.com.au/connect/token";
 const PINCH_TEST_API_URL = "https://api.getpinch.com.au/test";
@@ -70,9 +72,16 @@ const updateRows = async (table, query, changes) =>
     method: "PATCH",
   });
 
+const callRpc = async (name, parameters) =>
+  requestSupabase(`rpc/${name}`, {
+    body: JSON.stringify(parameters),
+    method: "POST",
+  });
+
 const getReadyBillingContext = async () => {
   const billingQuery = new URLSearchParams({
-    limit: "2",
+    limit: "100",
+    order: "created_at.desc",
     select: "id,user_id,provider_payer_id",
     status: "eq.ready",
   });
@@ -80,13 +89,31 @@ const getReadyBillingContext = async () => {
     `billing_accounts?${billingQuery}`,
   );
 
-  if (billingAccounts.length !== 1) {
+  if (billingAccounts.length === 0) {
     throw new Error(
-      `Expected exactly one ready sandbox billing account, found ${billingAccounts.length}.`,
+      "Expected at least one ready sandbox billing account.",
     );
   }
 
-  const billingAccount = billingAccounts[0];
+  let billingAccount = billingAccounts[0];
+
+  if (billingAccounts.length > 1) {
+    const paymentsQuery = new URLSearchParams({
+      limit: "100",
+      order: "created_at.desc",
+      select: "user_id",
+    });
+    const payments = await requestSupabase(`payments?${paymentsQuery}`);
+    const recentUserId = payments.find((payment) =>
+      billingAccounts.some(
+        (account) => account.user_id === payment.user_id,
+      ),
+    )?.user_id;
+
+    billingAccount =
+      billingAccounts.find((account) => account.user_id === recentUserId) ??
+      billingAccount;
+  }
   const sourceQuery = new URLSearchParams({
     billing_account_id: `eq.${billingAccount.id}`,
     is_default: "eq.true",
@@ -141,12 +168,12 @@ const getPinchAccessToken = async () => {
 };
 
 const createPinchPayment = async ({
+  accrualCount,
   amountCents,
   nonce,
   payerId,
-  quoteId,
+  paymentId,
   sourceId,
-  taskId,
   userId,
 }) => {
   const accessToken = await getPinchAccessToken();
@@ -156,9 +183,9 @@ const createPinchPayment = async ({
       amount: amountCents,
       description: "Outcomes: Mock worker completion proof",
       metadata: JSON.stringify({
+        outcomesAccrualCount: String(accrualCount),
+        outcomesPaymentId: paymentId,
         invocation: "mock-mcp-worker",
-        outcomesQuoteId: quoteId,
-        outcomesTaskId: taskId,
         outcomesUserId: userId,
         pricingModel: "mock-pricing-v1",
       }),
@@ -218,33 +245,62 @@ const main = async () => {
     throw new Error("The mock worker is locked to PINCH_ENVIRONMENT=test.");
   }
 
-  const { billingAccount, paymentSource } = await getReadyBillingContext();
+  const { billingAccount } = await getReadyBillingContext();
   const approvedAt = new Date().toISOString();
+  const repositorySha = "0".repeat(40);
+  const repositoryUrl = "legacy://mock-worker-payment";
+  const taskSpec = {
+    acceptanceCriteria: [
+      "The mock worker returns verified completion evidence before billing.",
+    ],
+    description:
+      "A scripted MCP-style invocation using mocked pricing and worker outputs.",
+    prohibitedChanges: [],
+  };
   const task = await insertRow("tasks", {
     acceptance_criteria:
       "The mock worker returns verified completion evidence before billing.",
     description:
       "A scripted MCP-style invocation using mocked pricing and worker outputs.",
+    external_ref: `mock-worker-${randomUUID()}`,
+    idempotency_key: `mock-worker-${randomUUID()}`,
+    repository_sha: repositorySha,
+    repository_url: repositoryUrl,
     status: "quoted",
+    task_spec: taskSpec,
     title: "Mock MCP worker payment verification",
     user_id: billingAccount.user_id,
   });
   const quote = await insertRow("quotes", {
+    acceptance_idempotency_key: `mock-acceptance-${randomUUID()}`,
+    accepted_at: approvedAt,
     amount_cents: MOCK_PRICE_CENTS,
     approved_at: approvedAt,
+    contract_hash: createHash("sha256")
+      .update(JSON.stringify({ taskId: task.id, taskSpec }))
+      .digest("hex"),
     currency: "AUD",
+    eligibility_decision: { eligible: true },
+    expires_at: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
     pricing_model_version: "mock-pricing-v1",
+    repository_sha: repositorySha,
+    repository_url: repositoryUrl,
+    request_id: `mock-request-${randomUUID()}`,
     status: "approved",
     task_id: task.id,
+    task_spec: taskSpec,
     terms:
-      "Charge the fixed sandbox price only after the mock worker verifies completion.",
+      "Accrue after verified completion and batch-charge the stored payment method when the outstanding balance reaches AUD $10.",
     user_id: billingAccount.user_id,
   });
 
   await updateRows(
     "tasks",
     new URLSearchParams({ id: `eq.${task.id}` }),
-    { status: "approved" },
+    {
+      quote_id: quote.id,
+      status: "approved",
+    },
   );
   await updateRows(
     "tasks",
@@ -259,27 +315,43 @@ const main = async () => {
     { status: "verified", verified_at: verifiedAt },
   );
 
-  const nonce = `outcomes-task-${task.id}-charge-v1`;
-  const payment = await insertRow("payments", {
-    amount_cents: quote.amount_cents,
-    billing_account_id: billingAccount.id,
-    currency: quote.currency,
-    environment: "test",
-    nonce,
-    payment_source_id: paymentSource.id,
-    provider: "pinch",
-    quote_id: quote.id,
-    status: "submitting",
-    task_id: task.id,
-    user_id: billingAccount.user_id,
+  const [accrual] = await callRpc("accrue_verified_task", {
+    p_task_id: task.id,
   });
+  const [claim] = await callRpc("claim_billing_accruals", {
+    p_threshold_cents: 1000,
+    p_user_id: billingAccount.user_id,
+  });
+
+  if (!accrual || !claim) {
+    throw new Error("The verified task did not produce a settlement claim.");
+  }
+
+  const paymentQuery = new URLSearchParams({
+    id: `eq.${claim.payment_id}`,
+    limit: "1",
+    select:
+      "id,amount_cents,currency,nonce,provider_payer_id_snapshot,provider_source_id_snapshot",
+  });
+  const [payment] = await requestSupabase(`payments?${paymentQuery}`);
+
+  if (!payment || payment.amount_cents !== claim.amount_cents) {
+    throw new Error("The claimed payment does not match the accrued balance.");
+  }
+
+  await updateRows(
+    "payments",
+    new URLSearchParams({ id: `eq.${payment.id}` }),
+    { status: "submitting" },
+  );
+
   const pinchPayment = await createPinchPayment({
-    amountCents: quote.amount_cents,
-    nonce,
-    payerId: billingAccount.provider_payer_id,
-    quoteId: quote.id,
-    sourceId: paymentSource.provider_source_id,
-    taskId: task.id,
+    accrualCount: claim.accrual_count,
+    amountCents: payment.amount_cents,
+    nonce: payment.nonce,
+    payerId: payment.provider_payer_id_snapshot,
+    paymentId: payment.id,
+    sourceId: payment.provider_source_id_snapshot,
     userId: billingAccount.user_id,
   });
   const normalizedStatus = pinchPayment.status.toLowerCase();
@@ -300,26 +372,32 @@ const main = async () => {
       status: paymentStatus,
     },
   );
-  await updateRows(
-    "tasks",
-    new URLSearchParams({ id: `eq.${task.id}` }),
-    { completed_at: completedAt, status: "completed" },
-  );
-
   if (paymentStatus === "failed") {
     throw new Error(`Pinch returned unsuccessful status ${pinchPayment.status}.`);
   }
 
-  const webhookEvent = await waitForPinchWebhook(pinchPayment.id);
+  let webhookEvent = null;
+
+  try {
+    webhookEvent = await waitForPinchWebhook(pinchPayment.id);
+  } catch (error) {
+    console.warn(
+      error instanceof Error
+        ? error.message
+        : "Pinch webhook confirmation was unavailable.",
+    );
+  }
 
   console.log(`Mock pricing produced AUD ${(MOCK_PRICE_CENTS / 100).toFixed(2)}.`);
-  console.log(`Mock worker verified task ${task.id}.`);
+  console.log(`Mock worker verified and accrued task ${task.id}.`);
   console.log(
     `Pinch sandbox payment ${pinchPayment.id} returned ${pinchPayment.status}.`,
   );
-  console.log(
-    `Pinch webhook ${webhookEvent.provider_event_id} was processed by Outcomes.`,
-  );
+  if (webhookEvent) {
+    console.log(
+      `Pinch webhook ${webhookEvent.provider_event_id} was processed by Outcomes.`,
+    );
+  }
 };
 
 main().catch((error) => {

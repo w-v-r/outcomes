@@ -2,9 +2,9 @@ import "server-only";
 
 import { type CustomerPrincipal } from "@/lib/api-keys/service";
 import {
-  chargeVerifiedTask,
-  type ChargeVerifiedTaskResult,
-} from "@/lib/billing/charge-verified-task";
+  accrueVerifiedTask,
+  type AccrueVerifiedTaskResult,
+} from "@/lib/billing/accrue-verified-task";
 import {
   GitHubAppClient,
   GitHubInstallationClient,
@@ -66,9 +66,9 @@ type TaskRow = {
 };
 
 type TaskLifecycleDependencies = {
-  chargeTask?: (
+  accrueTask?: (
     taskId: string,
-  ) => Promise<ChargeVerifiedTaskResult>;
+  ) => Promise<AccrueVerifiedTaskResult>;
   verifier?: VerifierAdapter;
   worker?: WorkerAdapter;
 };
@@ -628,32 +628,17 @@ const reconcileVerifier = async (
   return loadOwnedTask(task.user_id, task.id);
 };
 
-const chargeTaskIfVerified = async (
+const accrueTaskIfVerified = async (
   task: TaskRow,
-  chargeTask: (
+  accrueTask: (
     taskId: string,
-  ) => Promise<ChargeVerifiedTaskResult>,
+  ) => Promise<AccrueVerifiedTaskResult>,
 ) => {
-  if (!["verified", "charging"].includes(task.status)) {
+  if (task.status !== "verified") {
     return task;
   }
 
-  const payment = await chargeTask(task.id);
-
-  await appendTaskEvent({
-    data: {
-      payment_id: payment.paymentId,
-      payment_status: payment.paymentStatus,
-      replayed: payment.replayed,
-    },
-    eventType:
-      payment.paymentStatus === "failed" ||
-      payment.paymentStatus === "unknown"
-        ? "payment.failed"
-        : "payment.submitted",
-    taskId: task.id,
-    userId: task.user_id,
-  });
+  await accrueTask(task.id);
 
   return loadOwnedTask(task.user_id, task.id);
 };
@@ -662,7 +647,8 @@ const projectTask = async (task: TaskRow) => {
   const supabase = requireAdminClient();
   const [
     { data: events, error: eventsError },
-    { data: payment, error: paymentError },
+    { data: accrual, error: accrualError },
+    { data: allocation, error: allocationError },
     { data: execution, error: executionError },
   ] = await Promise.all([
     supabase
@@ -673,10 +659,17 @@ const projectTask = async (task: TaskRow) => {
       .order("created_at", { ascending: true })
       .order("id", { ascending: true }),
     supabase
-      .from("payments")
-      .select("provider_payment_id, status, amount_cents, currency")
+      .from("billing_accruals")
+      .select("payment_id, status, amount_cents, currency")
       .eq("task_id", task.id)
       .eq("user_id", task.user_id)
+      .maybeSingle(),
+    supabase
+      .from("payment_allocations")
+      .select("amount_cents, currency, payment_id")
+      .eq("task_id", task.id)
+      .eq("user_id", task.user_id)
+      .eq("status", "active")
       .maybeSingle(),
     supabase
       .from("task_execution_attempts")
@@ -688,12 +681,56 @@ const projectTask = async (task: TaskRow) => {
       .maybeSingle(),
   ]);
 
-  if (eventsError || paymentError || executionError) {
+  if (
+    eventsError ||
+    accrualError ||
+    allocationError ||
+    executionError
+  ) {
     throw new ControlPlaneError({
       code: "database_error",
       message: "Task status evidence could not be loaded.",
       status: 500,
     });
+  }
+
+  let payment = null;
+
+  if (allocation?.payment_id) {
+    const { data, error } = await supabase
+      .from("payments")
+      .select("provider_payment_id, status, amount_cents, currency")
+      .eq("id", allocation.payment_id)
+      .eq("user_id", task.user_id)
+      .single();
+
+    if (
+      error ||
+      !data ||
+      !accrual ||
+      allocation.amount_cents !== accrual.amount_cents ||
+      allocation.currency !== accrual.currency ||
+      data.amount_cents < allocation.amount_cents ||
+      data.currency !== allocation.currency
+    ) {
+      throw new ControlPlaneError({
+        code: "database_error",
+        message: "Task payment evidence could not be loaded.",
+        status: 500,
+      });
+    }
+
+    payment = data;
+  } else if (accrual) {
+    payment = {
+      amount_cents: accrual.amount_cents,
+      currency: accrual.currency,
+      provider_payment_id: null,
+      status:
+        accrual.status === "accrued"
+          ? "unpaid"
+          : "payment_in_progress",
+    };
   }
 
   return {
@@ -743,7 +780,7 @@ export const reconcileTaskLifecycle = async (
 ) => {
   const worker =
     dependencies.worker ?? new CursorCloudWorkerAdapter();
-  const chargeTask = dependencies.chargeTask ?? chargeVerifiedTask;
+  const accrueTask = dependencies.accrueTask ?? accrueVerifiedTask;
   let task = await loadOwnedTask(principal.userId, taskId);
 
   task = await startLegacyWorker(task, worker);
@@ -801,7 +838,7 @@ export const reconcileTaskLifecycle = async (
     await verifierInstallationClient?.revokeToken();
   }
 
-  task = await chargeTaskIfVerified(task, chargeTask);
+  task = await accrueTaskIfVerified(task, accrueTask);
 
   return projectTask(task);
 };

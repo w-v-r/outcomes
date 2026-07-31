@@ -77,12 +77,14 @@ Supabase, and reconcile the matching payment.
 Pinch creates the payment and event, but no request reaches Vercel. The
 `webhook_events` table therefore contains no Pinch-delivered event.
 
-Two independent post-registration examples:
+Three independent post-registration examples:
 
 1. Payment `pmt_I04RUKEbplUWJd` was approved for AUD 13.75. Pinch created event
    `evt_1ObGag3JtNIJys`.
 2. Payment `pmt_7PE4fdYbkGuIXt` was approved for AUD 13.75. Pinch created event
    `evt_yTaMNydVRMXGL1`.
+3. Accrual-batch payment `pmt_aHwTWeB3GD2Y7w` was approved for AUD 13.75 on
+   31 July 2026; no processed webhook arrived within the 20-second smoke window.
 
 #### Current configuration
 

@@ -4,10 +4,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/console/page-header";
 import { StatusBadge } from "@/components/console/status-badge";
 import { getAuthenticatedUser } from "@/lib/auth/get-authenticated-user";
-import {
-  getBillingDetails,
-  getConsoleTasks,
-} from "@/lib/console/data";
+import { getBillingDetails } from "@/lib/console/data";
 import {
   formatConsoleDate,
   formatCurrency,
@@ -17,14 +14,6 @@ export const metadata: Metadata = {
   title: "Billing",
 };
 
-const NON_BILLABLE_STATUSES = new Set([
-  "cancelled",
-  "failed",
-  "payment_failed",
-  "verification_failed",
-  "worker_failed",
-]);
-
 const BillingPage = async () => {
   const user = await getAuthenticatedUser();
 
@@ -32,19 +21,11 @@ const BillingPage = async () => {
     redirect("/sign-in");
   }
 
-  const [billing, tasks] = await Promise.all([
-    getBillingDetails(user.id),
-    getConsoleTasks(user.id),
-  ]);
-  const expectedCents = tasks
-    .filter(
-      (task) =>
-        !NON_BILLABLE_STATUSES.has(task.status) &&
-        !["approved", "settled"].includes(task.paymentStatus ?? ""),
-    )
-    .reduce((total, task) => total + (task.amountCents ?? 0), 0);
+  const billing = await getBillingDetails(user.id);
   const paidCents = billing.payments
-    .filter((payment) => ["approved", "settled"].includes(payment.status))
+    .filter((payment) =>
+      ["approved", "pending", "settled"].includes(payment.status),
+    )
     .reduce((total, payment) => total + payment.amountCents, 0);
   const paymentSourceLabel = billing.paymentSource
     ? `${billing.paymentSource.cardScheme?.toUpperCase() ?? "CARD"} •••• ${billing.paymentSource.lastFour ?? "—"}`
@@ -53,22 +34,31 @@ const BillingPage = async () => {
   return (
     <>
       <PageHeader
-        description="Expected charges and payment history."
+        description="Outstanding verified work and batched payment history."
         title="Billing"
       />
 
       <div className="max-w-6xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
         <section
           aria-label="Billing summary"
-          className="grid border-y border-paper/10 sm:grid-cols-3 sm:divide-x sm:divide-paper/10"
+          className="grid border-y border-paper/10 sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-paper/10"
         >
-          <div className="border-b border-paper/10 py-6 sm:border-b-0 sm:pr-6">
-            <p className="text-xs text-paper/45">Expected</p>
+          <div className="border-b border-paper/10 py-6 sm:pr-6 lg:border-b-0">
+            <p className="text-xs text-paper/45">Outstanding</p>
             <p className="mt-2 font-mono text-3xl tracking-[-0.05em] text-paper">
-              {formatCurrency(expectedCents)}
+              {formatCurrency(billing.outstandingCents)}
+            </p>
+            <p className="mt-2 text-xs text-paper/35">
+              Collected when the balance reaches $10.
             </p>
           </div>
-          <div className="border-b border-paper/10 py-6 sm:border-b-0 sm:px-6">
+          <div className="border-b border-paper/10 py-6 sm:pl-6 lg:border-b-0 lg:px-6">
+            <p className="text-xs text-paper/45">Processing</p>
+            <p className="mt-2 font-mono text-3xl tracking-[-0.05em] text-paper">
+              {formatCurrency(billing.inProgressCents)}
+            </p>
+          </div>
+          <div className="border-b border-paper/10 py-6 sm:pr-6 lg:border-b-0 lg:px-6">
             <p className="text-xs text-paper/45">Paid</p>
             <p className="mt-2 font-mono text-3xl tracking-[-0.05em] text-paper">
               {formatCurrency(paidCents)}
@@ -116,7 +106,7 @@ const BillingPage = async () => {
               <thead>
                 <tr className="border-b border-paper/10 text-[11px] font-medium uppercase tracking-[0.07em] text-paper/40">
                   <th className="px-3 py-3 font-medium" scope="col">
-                    Task
+                    Work
                   </th>
                   <th className="px-3 py-3 font-medium" scope="col">
                     Date
@@ -145,8 +135,21 @@ const BillingPage = async () => {
                 ) : (
                   billing.payments.map((payment) => (
                     <tr className="text-sm" key={payment.id}>
-                      <th className="px-3 py-4 font-medium text-paper" scope="row">
-                        {payment.taskTitle}
+                      <th className="px-3 py-4 font-normal" scope="row">
+                        <p className="font-medium text-paper">
+                          {payment.taskTitles.length === 0
+                            ? "Legacy payment"
+                            : `${payment.taskTitles.length} ${
+                                payment.taskTitles.length === 1
+                                  ? "task"
+                                  : "tasks"
+                              }`}
+                        </p>
+                        {payment.taskTitles.length > 0 ? (
+                          <p className="mt-1 max-w-sm text-xs text-paper/40">
+                            {payment.taskTitles.join(", ")}
+                          </p>
+                        ) : null}
                       </th>
                       <td className="whitespace-nowrap px-3 py-4 text-paper/45">
                         {formatConsoleDate(

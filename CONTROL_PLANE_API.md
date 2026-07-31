@@ -270,6 +270,8 @@ claimed as a published npm release in Task 3.
 - `CRON_SECRET`
 - `OUTCOMES_EXECUTION_BATCH_SIZE` (optional; use `1`; isolated claims are
   always one per invocation)
+- `OUTCOMES_BILLING_BATCH_SIZE` (optional; defaults to `25` customer balances
+  per settlement run)
 - `OUTCOMES_GITHUB_TOKEN` (legacy fixture verifier only)
 - Supabase variables from `.env.example`
 - GitHub App variables from `.env.example`
@@ -283,6 +285,20 @@ retry-backoff, cloud-exclusion, payment-evidence, RLS, and grant assertions in
 `supabase/tests/task_execution_claims.sql`, then applied to the linked
 production project. Remote history and service-role Data API access to the new
 execution, task, and payment fields were verified.
+
+Accrual billing adds `20260731035108_billing_accrual_threshold.sql`.
+Verification calls `accrue_verified_task` and completes delivery without
+calling Pinch. The separately authenticated
+`GET|POST /api/internal/billing/settle` route runs at 00:00, 06:00, 12:00, and
+18:00 UTC. It atomically claims exact outstanding rows once a customer reaches
+AUD $10, then submits one Pinch payment for that claimed sum. Run the same path
+locally with `npm run billing:settle -- --batch 25`.
+
+For this change, apply the accrual migration before deploying the application,
+then confirm both Vercel cron registrations. The migration remains compatible
+with task execution from the previous application, but deliberately rejects
+new legacy per-task payment inserts during the narrow rolling window. Verified
+tasks remain retryable and accrue once the new application is live.
 
 Rolling deploy order: deploy the application first, promptly apply the Task 4
 migration, then enable cron. The migration converts approved binding-backed
