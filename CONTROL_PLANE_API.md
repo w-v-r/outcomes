@@ -183,7 +183,8 @@ Before execution, the service compares the accepted task, quote, underwriting,
 binding, snapshot, manifest hash, repository ID, installation generation,
 branch, SHA, task contract, estimator evidence, and reproducible contract hash.
 It then rechecks current GitHub App permissions, repository identity, exact
-branch tip, and commit. Revoked, stale, or mismatched evidence fails closed with
+branch tip, and commit before downloading a bounded exact-SHA archive. Execution
+does not depend on a system `git` executable. Revoked, stale, or mismatched evidence fails closed with
 a customer-safe error; detailed evidence remains on the service-only attempt.
 
 Acceptance independently requires matching immutable underwriting evidence.
@@ -210,7 +211,10 @@ unsupported file shapes are excluded.
 Verifier dispatch persists a timestamp and recovery lease; the task ID is the
 provider-visible workflow identity. Dispatch and recovery are scoped to the
 task repository and base branch; a repository without the trusted
-`outcomes-verify.yml` profile cannot verify or charge. A crash with no stored
+`outcomes-verify.yml` profile cannot verify or charge. Binding-backed tasks mint
+a short-lived, repository-scoped GitHub App token with Actions write and
+Contents read permission for each verifier reconciliation; customer private
+repositories do not depend on an Outcomes user's personal token. A crash with no stored
 run ID searches GitHub Actions for that identity; multiple or undiscoverable
 runs fail closed without redispatch or charging. Pinch
 `reserved`, `submitting`, and ambiguous states first query the deterministic
@@ -266,7 +270,7 @@ claimed as a published npm release in Task 3.
 - `CRON_SECRET`
 - `OUTCOMES_EXECUTION_BATCH_SIZE` (optional; use `1`; isolated claims are
   always one per invocation)
-- `OUTCOMES_GITHUB_TOKEN`
+- `OUTCOMES_GITHUB_TOKEN` (legacy fixture verifier only)
 - Supabase variables from `.env.example`
 - GitHub App variables from `.env.example`
 - Pinch sandbox variables from `.env.example`

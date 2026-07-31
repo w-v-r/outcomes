@@ -1,11 +1,9 @@
-import { readFile, lstat } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
-import { execFile } from "node:child_process";
 
-const execFileAsync = promisify(execFile);
 const MAX_CHANGED_FILES = 25;
 const MAX_FILE_BYTES = 500_000;
+const MAX_SCANNED_FILES = 50_000;
 const MAX_TOTAL_BYTES = 1_000_000;
 const PROHIBITED_PATHS = new Set([
   ".gitmodules",
@@ -95,31 +93,6 @@ export const assertPersistedWorkspaceChanges = ({
   }
 };
 
-const runGit = async ({
-  args,
-  gitDirectory,
-  workspaceDirectory,
-}: {
-  args: string[];
-  gitDirectory: string;
-  workspaceDirectory: string;
-}): Promise<string> => {
-  const { stdout } = await execFileAsync(
-    "git",
-    [
-      `--git-dir=${gitDirectory}`,
-      `--work-tree=${workspaceDirectory}`,
-      ...args,
-    ],
-    {
-      encoding: "utf8",
-      maxBuffer: 2_000_000,
-    },
-  );
-
-  return stdout;
-};
-
 const isSafeRepositoryPath = (value: string): boolean => {
   if (
     !value ||
@@ -153,75 +126,74 @@ const isProhibitedPath = (value: string): boolean =>
   PROHIBITED_PATHS.has(value) ||
   PROHIBITED_PATH_PREFIXES.some((prefix) => value.startsWith(prefix));
 
-const parseStatus = (statusOutput: string): Map<string, string> => {
-  const statusByPath = new Map<string, string>();
-  const records = statusOutput.split("\0").filter(Boolean);
-
-  for (let index = 0; index < records.length; index += 1) {
-    const record = records[index];
-    const status = record.slice(0, 2);
-    const changedPath = record.slice(3);
-
-    if (status.includes("R") || status.includes("C")) {
-      throw new Error("Renamed or copied files are not supported by the spike.");
-    }
-
-    if (!isSafeRepositoryPath(changedPath)) {
-      throw new Error("The worker produced an unsafe repository path.");
-    }
-
-    statusByPath.set(changedPath, status);
-  }
-
-  return statusByPath;
+type WorkspaceFile = {
+  content: Buffer;
+  mode: "100644" | "100755";
 };
 
-const getFileMode = async ({
-  changedPath,
-  gitDirectory,
-  status,
-  workspaceDirectory,
-}: {
-  changedPath: string;
-  gitDirectory: string;
-  status: string;
-  workspaceDirectory: string;
-}): Promise<"100644" | "100755"> => {
-  if (status !== "??") {
-    const stage = await runGit({
-      args: ["ls-files", "--stage", "--", changedPath],
-      gitDirectory,
-      workspaceDirectory,
-    });
-    const mode = stage.split(/\s/u, 1)[0];
+const readWorkspaceFiles = async (
+  rootDirectory: string,
+): Promise<Map<string, WorkspaceFile>> => {
+  const files = new Map<string, WorkspaceFile>();
+  const pendingDirectories = [""];
 
-    if (mode === "100644" || mode === "100755") {
-      return mode;
+  while (pendingDirectories.length > 0) {
+    const relativeDirectory = pendingDirectories.pop()!;
+    const absoluteDirectory = path.join(rootDirectory, relativeDirectory);
+    const entries = await readdir(absoluteDirectory, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const relativePath = relativeDirectory
+        ? path.posix.join(relativeDirectory, entry.name)
+        : entry.name;
+
+      if (!isSafeRepositoryPath(relativePath)) {
+        throw new Error("The worker produced an unsafe repository path.");
+      }
+
+      const absolutePath = path.join(rootDirectory, relativePath);
+      const fileStat = await lstat(absolutePath);
+
+      if (fileStat.isSymbolicLink()) {
+        throw new Error(
+          "Repositories containing symlinks or submodules are unsupported by the isolated worker.",
+        );
+      }
+
+      if (fileStat.isDirectory()) {
+        pendingDirectories.push(relativePath);
+        continue;
+      }
+
+      if (!fileStat.isFile()) {
+        throw new Error(
+          `Only regular files may exist in the isolated workspace: ${relativePath}`,
+        );
+      }
+
+      if (files.size >= MAX_SCANNED_FILES) {
+        throw new Error(
+          `The isolated workspace exceeds ${MAX_SCANNED_FILES} files.`,
+        );
+      }
+
+      files.set(relativePath, {
+        content: await readFile(absolutePath),
+        mode: (fileStat.mode & 0o111) === 0 ? "100644" : "100755",
+      });
     }
-
-    throw new Error(
-      `Unsupported Git object mode for changed file: ${changedPath}`,
-    );
   }
 
-  const fileStat = await lstat(path.join(workspaceDirectory, changedPath));
-
-  if (!fileStat.isFile() || fileStat.isSymbolicLink()) {
-    throw new Error(`Only regular files may be added: ${changedPath}`);
-  }
-
-  return (fileStat.mode & 0o111) === 0 ? "100644" : "100755";
+  return files;
 };
 
 export const collectValidatedWorkspaceChanges = async ({
   allowedPaths,
-  baseSha,
-  gitDirectory,
+  baselineDirectory,
   workspaceDirectory,
 }: {
   allowedPaths: string[];
-  baseSha: string;
-  gitDirectory: string;
+  baselineDirectory: string;
   workspaceDirectory: string;
 }): Promise<ValidatedWorkspaceChange[]> => {
   if (
@@ -235,61 +207,32 @@ export const collectValidatedWorkspaceChanges = async ({
     throw new Error("At least one safe allowed path is required.");
   }
 
-  const headSha = (
-    await runGit({
-      args: ["rev-parse", "HEAD"],
-      gitDirectory,
-      workspaceDirectory,
-    })
-  ).trim();
-
-  if (headSha !== baseSha) {
-    throw new Error("The isolated workspace baseline SHA changed during execution.");
-  }
-
-  const baselineEntries = (
-    await runGit({
-      args: ["ls-files", "--stage", "-z"],
-      gitDirectory,
-      workspaceDirectory,
-    })
-  )
-    .split("\0")
-    .filter(Boolean);
-  const unsupportedBaselineEntry = baselineEntries.find((entry) => {
-    const mode = entry.slice(0, 6);
-    return mode === "120000" || mode === "160000";
-  });
-
-  if (unsupportedBaselineEntry) {
-    throw new Error(
-      "Repositories containing symlinks or submodules are unsupported by the isolated-worker spike.",
-    );
-  }
-
-  const statusOutput = await runGit({
-    args: ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
-    gitDirectory,
-    workspaceDirectory,
-  });
-  const statusByPath = parseStatus(statusOutput);
-
-  if (statusByPath.size === 0) {
-    throw new Error("The worker completed without producing a change.");
-  }
-
-  if (statusByPath.size > MAX_CHANGED_FILES) {
-    throw new Error(
-      `The worker changed more than ${MAX_CHANGED_FILES} files.`,
-    );
-  }
-
+  const [baselineFiles, workspaceFiles] = await Promise.all([
+    readWorkspaceFiles(baselineDirectory),
+    readWorkspaceFiles(workspaceDirectory),
+  ]);
+  const candidatePaths = new Set([
+    ...baselineFiles.keys(),
+    ...workspaceFiles.keys(),
+  ]);
   let totalBytes = 0;
   const changes: ValidatedWorkspaceChange[] = [];
 
-  for (const [changedPath, status] of [...statusByPath].sort(([left], [right]) =>
+  for (const changedPath of [...candidatePaths].sort((left, right) =>
     left.localeCompare(right),
   )) {
+    const baselineFile = baselineFiles.get(changedPath);
+    const workspaceFile = workspaceFiles.get(changedPath);
+
+    if (
+      baselineFile &&
+      workspaceFile &&
+      baselineFile.mode === workspaceFile.mode &&
+      baselineFile.content.equals(workspaceFile.content)
+    ) {
+      continue;
+    }
+
     if (
       isProhibitedPath(changedPath) ||
       !isAllowedPath({ allowedPaths, changedPath })
@@ -297,13 +240,7 @@ export const collectValidatedWorkspaceChanges = async ({
       throw new Error(`The worker changed a prohibited path: ${changedPath}`);
     }
 
-    if (/[ADU]/u.test(status) && status !== "??") {
-      if (status.includes("U") || status === "AA" || status === "DD") {
-        throw new Error(`The worker left a conflicted file: ${changedPath}`);
-      }
-    }
-
-    if (status.includes("D")) {
+    if (!workspaceFile) {
       changes.push({
         path: changedPath,
         status: "deleted",
@@ -311,9 +248,7 @@ export const collectValidatedWorkspaceChanges = async ({
       continue;
     }
 
-    const content = await readFile(
-      path.join(workspaceDirectory, changedPath),
-    );
+    const { content, mode } = workspaceFile;
 
     if (content.byteLength > MAX_FILE_BYTES) {
       throw new Error(`Changed file exceeds ${MAX_FILE_BYTES} bytes: ${changedPath}`);
@@ -333,15 +268,20 @@ export const collectValidatedWorkspaceChanges = async ({
 
     changes.push({
       contentBase64: content.toString("base64"),
-      mode: await getFileMode({
-        changedPath,
-        gitDirectory,
-        status,
-        workspaceDirectory,
-      }),
+      mode,
       path: changedPath,
-      status: status === "??" ? "added" : "modified",
+      status: baselineFile ? "modified" : "added",
     });
+  }
+
+  if (changes.length === 0) {
+    throw new Error("The worker completed without producing a change.");
+  }
+
+  if (changes.length > MAX_CHANGED_FILES) {
+    throw new Error(
+      `The worker changed more than ${MAX_CHANGED_FILES} files.`,
+    );
   }
 
   return changes;

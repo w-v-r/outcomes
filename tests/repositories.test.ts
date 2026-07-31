@@ -361,6 +361,7 @@ describe("repository capture preflight", () => {
       appSlug: "outcomes-test",
       installationId: 987,
       permissions: {
+        actions: "write",
         contents: installationPermissionsValid ? "write" : "read",
         pull_requests: "write",
       },
@@ -375,6 +376,7 @@ describe("repository capture preflight", () => {
             id: INSTALLATION_ROW_ID,
             installationId: 987,
             permissions: {
+              actions: "write",
               contents: installationPermissionsValid ? "write" : "read",
               pull_requests: "write",
             },

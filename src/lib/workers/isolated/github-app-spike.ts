@@ -422,8 +422,7 @@ export const runGitHubAppWorkerSpike = async ({
     try {
       changes = await collectValidatedWorkspaceChanges({
         allowedPaths,
-        baseSha,
-        gitDirectory: workspace.gitDirectory,
+        baselineDirectory: workspace.baselineDirectory,
         workspaceDirectory: workspace.workspaceDirectory,
       });
     } catch (error) {

@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import {
   generateKeyPairSync,
   verify,
@@ -6,14 +5,12 @@ import {
 import {
   mkdir,
   mkdtemp,
-  rename,
   rm,
   symlink,
   writeFile,
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
@@ -37,7 +34,6 @@ import {
 } from "@/lib/workers/isolated/process";
 import { collectValidatedWorkspaceChanges } from "@/lib/workers/isolated/workspace-changes";
 
-const execFileAsync = promisify(execFile);
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
@@ -188,7 +184,7 @@ describe("GitHub App client", () => {
     });
   });
 
-  test("narrows clone, scan, and publication tokens to one repository and phase", async () => {
+  test("narrows execution and verification tokens to one repository and phase", async () => {
     const { privateKey } = generateKeyPairSync("rsa", {
       modulusLength: 2_048,
     });
@@ -245,6 +241,12 @@ describe("GitHub App client", () => {
       repository,
       repositoryId: 77,
     });
+    await client.createInstallationToken({
+      installationId: 987,
+      purpose: "verify",
+      repository,
+      repositoryId: 77,
+    });
 
     expect(
       JSON.parse(
@@ -278,6 +280,17 @@ describe("GitHub App client", () => {
       permissions: {
         contents: "write",
         pull_requests: "write",
+      },
+      repository_ids: [77],
+    });
+    expect(
+      JSON.parse(
+        fetchImplementation.mock.calls[4]?.[1]?.body as string,
+      ),
+    ).toEqual({
+      permissions: {
+        actions: "write",
+        contents: "read",
       },
       repository_ids: [77],
     });
@@ -395,16 +408,14 @@ describe("isolated workspace validation", () => {
     await expect(
       collectValidatedWorkspaceChanges({
         allowedPaths: [".github/workflows/"],
-        baseSha: "a".repeat(40),
-        gitDirectory: "/unused",
+        baselineDirectory: "/unused",
         workspaceDirectory: "/unused",
       }),
     ).rejects.toThrow("safe allowed path");
     await expect(
       collectValidatedWorkspaceChanges({
         allowedPaths: ["package.json"],
-        baseSha: "a".repeat(40),
-        gitDirectory: "/unused",
+        baselineDirectory: "/unused",
         workspaceDirectory: "/unused",
       }),
     ).rejects.toThrow("safe allowed path");
@@ -415,38 +426,17 @@ describe("isolated workspace validation", () => {
       path.join(os.tmpdir(), "outcomes-symlink-test-"),
     );
     temporaryDirectories.push(rootDirectory);
+    const baselineDirectory = path.join(rootDirectory, "baseline");
     const workspaceDirectory = path.join(rootDirectory, "workspace");
-    const gitDirectory = path.join(rootDirectory, "git-metadata");
-    await mkdir(workspaceDirectory);
-    await execFileAsync("git", ["init", "--quiet"], {
-      cwd: workspaceDirectory,
-    });
-    await execFileAsync("git", ["config", "user.email", "test@example.com"], {
-      cwd: workspaceDirectory,
-    });
-    await execFileAsync("git", ["config", "user.name", "Outcomes Test"], {
-      cwd: workspaceDirectory,
-    });
+    await Promise.all([mkdir(baselineDirectory), mkdir(workspaceDirectory)]);
+    await writeFile(path.join(baselineDirectory, "target.txt"), "target\n");
+    await symlink("target.txt", path.join(baselineDirectory, "link.txt"));
     await writeFile(path.join(workspaceDirectory, "target.txt"), "target\n");
-    await symlink("target.txt", path.join(workspaceDirectory, "link.txt"));
-    await execFileAsync("git", ["add", "target.txt", "link.txt"], {
-      cwd: workspaceDirectory,
-    });
-    await execFileAsync("git", ["commit", "--quiet", "-m", "baseline"], {
-      cwd: workspaceDirectory,
-    });
-    const { stdout: baseShaOutput } = await execFileAsync(
-      "git",
-      ["rev-parse", "HEAD"],
-      { cwd: workspaceDirectory },
-    );
-    await rename(path.join(workspaceDirectory, ".git"), gitDirectory);
 
     await expect(
       collectValidatedWorkspaceChanges({
         allowedPaths: ["target.txt"],
-        baseSha: baseShaOutput.trim(),
-        gitDirectory,
+        baselineDirectory,
         workspaceDirectory,
       }),
     ).rejects.toThrow("symlinks or submodules");
@@ -457,35 +447,13 @@ describe("isolated workspace validation", () => {
       path.join(os.tmpdir(), "outcomes-change-test-"),
     );
     temporaryDirectories.push(rootDirectory);
+    const baselineDirectory = path.join(rootDirectory, "baseline");
     const workspaceDirectory = path.join(rootDirectory, "workspace");
-    const gitDirectory = path.join(rootDirectory, "git-metadata");
-    await mkdir(workspaceDirectory);
-    await execFileAsync("git", ["init", "--quiet"], {
-      cwd: workspaceDirectory,
-    });
-    await execFileAsync("git", ["config", "user.email", "test@example.com"], {
-      cwd: workspaceDirectory,
-    });
-    await execFileAsync("git", ["config", "user.name", "Outcomes Test"], {
-      cwd: workspaceDirectory,
-    });
+    await Promise.all([mkdir(baselineDirectory), mkdir(workspaceDirectory)]);
     await writeFile(
-      path.join(workspaceDirectory, "README.md"),
+      path.join(baselineDirectory, "README.md"),
       "before\n",
     );
-    await execFileAsync("git", ["add", "README.md"], {
-      cwd: workspaceDirectory,
-    });
-    await execFileAsync("git", ["commit", "--quiet", "-m", "baseline"], {
-      cwd: workspaceDirectory,
-    });
-    const { stdout: baseShaOutput } = await execFileAsync(
-      "git",
-      ["rev-parse", "HEAD"],
-      { cwd: workspaceDirectory },
-    );
-    const baseSha = baseShaOutput.trim();
-    await rename(path.join(workspaceDirectory, ".git"), gitDirectory);
     await writeFile(
       path.join(workspaceDirectory, "README.md"),
       "after\n",
@@ -494,8 +462,7 @@ describe("isolated workspace validation", () => {
     await expect(
       collectValidatedWorkspaceChanges({
         allowedPaths: ["README.md"],
-        baseSha,
-        gitDirectory,
+        baselineDirectory,
         workspaceDirectory,
       }),
     ).resolves.toEqual([
@@ -513,38 +480,17 @@ describe("isolated workspace validation", () => {
       path.join(os.tmpdir(), "outcomes-change-test-"),
     );
     temporaryDirectories.push(rootDirectory);
+    const baselineDirectory = path.join(rootDirectory, "baseline");
     const workspaceDirectory = path.join(rootDirectory, "workspace");
-    const gitDirectory = path.join(rootDirectory, "git-metadata");
-    await mkdir(workspaceDirectory);
-    await execFileAsync("git", ["init", "--quiet"], {
-      cwd: workspaceDirectory,
-    });
-    await execFileAsync("git", ["config", "user.email", "test@example.com"], {
-      cwd: workspaceDirectory,
-    });
-    await execFileAsync("git", ["config", "user.name", "Outcomes Test"], {
-      cwd: workspaceDirectory,
-    });
+    await Promise.all([mkdir(baselineDirectory), mkdir(workspaceDirectory)]);
+    await writeFile(path.join(baselineDirectory, "package.json"), "{}\n");
     await writeFile(path.join(workspaceDirectory, "package.json"), "{}\n");
-    await execFileAsync("git", ["add", "package.json"], {
-      cwd: workspaceDirectory,
-    });
-    await execFileAsync("git", ["commit", "--quiet", "-m", "baseline"], {
-      cwd: workspaceDirectory,
-    });
-    const { stdout: baseShaOutput } = await execFileAsync(
-      "git",
-      ["rev-parse", "HEAD"],
-      { cwd: workspaceDirectory },
-    );
-    await rename(path.join(workspaceDirectory, ".git"), gitDirectory);
     await writeFile(path.join(workspaceDirectory, "package.json"), '{"x":1}\n');
 
     await expect(
       collectValidatedWorkspaceChanges({
         allowedPaths: ["src/"],
-        baseSha: baseShaOutput.trim(),
-        gitDirectory,
+        baselineDirectory,
         workspaceDirectory,
       }),
     ).rejects.toThrow("prohibited path");

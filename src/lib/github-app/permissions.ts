@@ -4,11 +4,12 @@ export const assertExecutionPermissions = (
   installation: GitHubInstallation,
 ): void => {
   if (
+    installation.permissions.actions !== "write" ||
     installation.permissions.contents !== "write" ||
     installation.permissions.pull_requests !== "write"
   ) {
     throw new Error(
-      "The Outcomes GitHub App requires write access to repository contents and pull requests.",
+      "The Outcomes GitHub App requires write access to Actions, repository contents, and pull requests.",
     );
   }
 

@@ -199,6 +199,7 @@ const assertStoredInstallation = (
   }
 
   if (
+    installation.permissions.actions !== "write" ||
     installation.permissions.contents !== "write" ||
     installation.permissions.pull_requests !== "write"
   ) {
@@ -227,6 +228,7 @@ const assertCurrentInstallation = ({
   }
 
   if (
+    current.permissions.actions !== "write" ||
     current.permissions.contents !== "write" ||
     current.permissions.pull_requests !== "write" ||
     current.suspendedAt

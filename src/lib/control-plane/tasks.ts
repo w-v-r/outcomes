@@ -5,6 +5,13 @@ import {
   chargeVerifiedTask,
   type ChargeVerifiedTaskResult,
 } from "@/lib/billing/charge-verified-task";
+import {
+  GitHubAppClient,
+  GitHubInstallationClient,
+  requireGitHubRepository,
+} from "@/lib/github-app/client";
+import { getGitHubAppConfig } from "@/lib/github-app/config";
+import { loadOwnedRepositoryEvidence } from "@/lib/repositories/evidence";
 import { parseGitHubRepository } from "@/lib/repositories/github";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { GitHubActionsVerifierAdapter } from "@/lib/verifiers/github/adapter";
@@ -738,21 +745,62 @@ export const reconcileTaskLifecycle = async (
     dependencies.worker ?? new CursorCloudWorkerAdapter();
   const chargeTask = dependencies.chargeTask ?? chargeVerifiedTask;
   let task = await loadOwnedTask(principal.userId, taskId);
-  const repository = parseGitHubRepository(task.repository_url);
-  const verifier =
-    dependencies.verifier ??
-    new GitHubActionsVerifierAdapter({
-      defaultBranch: task.repository_base_branch ?? "main",
-      repositoryFullName:
-        repository?.fullName ?? "invalid/invalid",
-    });
 
   task = await startLegacyWorker(task, worker);
   task = await recoverStaleStartup(task, worker);
   task = await reconcileWorker(task, worker);
-  task = await startVerifier(task, verifier);
-  task = await recoverVerifierDispatch(task, verifier);
-  task = await reconcileVerifier(task, verifier);
+
+  const repository = parseGitHubRepository(task.repository_url);
+  let verifier = dependencies.verifier;
+  let verifierInstallationClient: GitHubInstallationClient | null = null;
+
+  if (
+    !verifier &&
+    task.repository_binding_id &&
+    ["worker_succeeded", "verifying"].includes(task.status)
+  ) {
+    const evidence = await loadOwnedRepositoryEvidence(
+      principal,
+      task.repository_binding_id,
+    );
+    const appClient = new GitHubAppClient({
+      config: getGitHubAppConfig(),
+    });
+    const token = await appClient.createInstallationToken({
+      installationId:
+        evidence.binding.accessBinding.githubInstallationId,
+      purpose: "verify",
+      repository: requireGitHubRepository(
+        evidence.binding.repository.canonicalUrl,
+      ),
+      repositoryId:
+        evidence.binding.repository.githubRepositoryId,
+    });
+
+    verifierInstallationClient = new GitHubInstallationClient({
+      token: token.token,
+    });
+    verifier = new GitHubActionsVerifierAdapter({
+      defaultBranch: task.repository_base_branch ?? "main",
+      repositoryFullName: evidence.binding.repository.fullName,
+      token: token.token,
+    });
+  }
+
+  verifier ??= new GitHubActionsVerifierAdapter({
+    defaultBranch: task.repository_base_branch ?? "main",
+    repositoryFullName:
+      repository?.fullName ?? "invalid/invalid",
+  });
+
+  try {
+    task = await startVerifier(task, verifier);
+    task = await recoverVerifierDispatch(task, verifier);
+    task = await reconcileVerifier(task, verifier);
+  } finally {
+    await verifierInstallationClient?.revokeToken();
+  }
+
   task = await chargeTaskIfVerified(task, chargeTask);
 
   return projectTask(task);

@@ -212,7 +212,9 @@ rotating lease token, recovers expired leases, and persists run, internal
 failure, changed-file, commit, branch, and PR evidence. The orchestrator reloads
 and hashes the accepted quote, underwriting, binding, snapshot, installation,
 repository ID, base branch, and SHA before execution. Current GitHub App
-permissions and the exact branch tip/commit are checked again before clone.
+permissions and the exact branch tip/commit are checked again before a bounded
+archive is downloaded. The worker and baseline are compared directly, so the
+production runner does not require a system `git` executable.
 One execution is claimed per invocation. A 90-second fenced lease is renewed
 every 20 seconds throughout external work; loss aborts the child process and
 prevents publication/completion/failure writes. Temporary provider failures use
@@ -240,7 +242,10 @@ repository bindings. The snapshot URL/SHA legacy quote shape remains compatible
 and advances through the prior Cursor Cloud lifecycle in the background; it is
 never claimed by the isolated runner. Verification is scoped to the task's
 repository and base branch; a repository without the trusted
-`outcomes-verify.yml` workflow cannot verify or charge. Verifier dispatch
+`outcomes-verify.yml` workflow cannot verify or charge. Customers install that
+small repository-owned policy once; it accepts only Outcomes' pinned baseline,
+result branch, and task ID, while the repository decides which independent
+tests and path constraints must pass. Verifier dispatch
 recovery discovers the task-keyed workflow run and fails closed rather than
 redispatching when identity cannot be established. Pinch
 `reserved`/`submitting`/`unknown` payments reconcile and, only after a
@@ -421,6 +426,7 @@ Register one GitHub App owned by Outcomes with:
 - Callback URL: `<NEXT_PUBLIC_APP_URL>/api/github/callback`
 - Request user authorization during installation: enabled
 - Repository permissions:
+  - Actions: read and write
   - Contents: read and write
   - Pull requests: read and write
 - Installation scope: any account, with customers encouraged to select only
@@ -433,7 +439,9 @@ installation against the authorizing GitHub user before persisting it; the
 untrusted `installation_id` query parameter is never accepted on its own.
 
 The isolated worker path mints repository-scoped installation tokens for at most one
-hour and revokes each token after clone or publication. The local Cursor agent
+hour and revokes each token after archive download, publication, or verifier
+reconciliation. Binding-backed verification uses the customer's GitHub App
+installation rather than an Outcomes user's personal token. The local Cursor agent
 runs in a separate process with a fresh home directory, an explicit sandbox,
 no ambient settings, no Git metadata, and no GitHub credential. A publisher
 outside the agent validates the allowlisted diff, creates the commit and

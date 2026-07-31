@@ -752,6 +752,7 @@ const assertAcceptedEvidence = (
       binding.accessBinding.githubInstallationId ||
     installation.disconnectedAt ||
     installation.suspendedAt ||
+    installation.permissions.actions !== "write" ||
     installation.permissions.contents !== "write" ||
     installation.permissions.pull_requests !== "write"
   ) {

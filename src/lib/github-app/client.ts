@@ -180,7 +180,7 @@ export class GitHubAppClient {
     repositoryId,
   }: {
     installationId: number;
-    purpose: "clone" | "discover" | "publish" | "scan";
+    purpose: "clone" | "discover" | "publish" | "scan" | "verify";
     repository: GitHubRepository;
     repositoryId?: number;
   }): Promise<GitHubInstallationToken> {
@@ -191,7 +191,7 @@ export class GitHubAppClient {
         repositoryId <= 0)
     ) {
       throw new Error(
-        "A verified GitHub repository ID is required for clone, scan, and publication.",
+        "A verified GitHub repository ID is required for clone, scan, publication, and verification.",
       );
     }
 
@@ -210,6 +210,11 @@ export class GitHubAppClient {
                   contents: "write",
                   pull_requests: "write",
                 }
+              : purpose === "verify"
+                ? {
+                    actions: "write",
+                    contents: "read",
+                  }
               : { contents: "read" },
           ...(repositoryId
             ? { repository_ids: [repositoryId] }

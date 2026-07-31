@@ -236,6 +236,7 @@ describe("GitHub verifier dispatch recovery", () => {
       new GitHubActionsVerifierAdapter({
         defaultBranch: "trunk",
         repositoryFullName: "acme/repo",
+        token: "installation-token",
         verifierWorkflow: "verify.yml",
       }).recoverVerification({
           dispatchedAfter: "2026-07-31T00:00:00.000Z",
@@ -249,7 +250,11 @@ describe("GitHub verifier dispatch recovery", () => {
       expect.stringContaining(
         "/repos/acme/repo/actions/workflows/verify.yml/runs",
       ),
-      expect.any(Object),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer installation-token",
+        }),
+      }),
     );
   });
 

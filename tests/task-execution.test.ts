@@ -161,7 +161,11 @@ const createEvidence = (): TaskExecutionEvidence => {
       disconnectedAt: null,
       id: INSTALLATION_GENERATION_ID,
       installationId: 987,
-      permissions: { contents: "write", pull_requests: "write" },
+      permissions: {
+        actions: "write",
+        contents: "write",
+        pull_requests: "write",
+      },
       suspendedAt: null,
       userId: USER_ID,
     },

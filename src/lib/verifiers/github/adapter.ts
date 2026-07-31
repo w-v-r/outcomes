@@ -9,9 +9,11 @@ import {
 
 const GITHUB_API_URL = "https://api.github.com";
 
-const requireGitHubToken = () => {
+const requireGitHubToken = (providedToken?: string) => {
   const token = (
-    process.env.OUTCOMES_GITHUB_TOKEN ?? process.env.GITHUB_TOKEN
+    providedToken ??
+    process.env.OUTCOMES_GITHUB_TOKEN ??
+    process.env.GITHUB_TOKEN
   )?.trim();
 
   if (!token) {
@@ -24,12 +26,13 @@ const requireGitHubToken = () => {
 const githubRequest = async (
   path: string,
   init: RequestInit = {},
+  token?: string,
 ) => {
   const response = await fetch(`${GITHUB_API_URL}${path}`, {
     ...init,
     headers: {
       Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${requireGitHubToken()}`,
+      Authorization: `Bearer ${requireGitHubToken(token)}`,
       "X-GitHub-Api-Version": "2022-11-28",
       ...init.headers,
     },
@@ -51,19 +54,23 @@ const wait = (milliseconds: number) =>
 export class GitHubActionsVerifierAdapter implements VerifierAdapter {
   readonly #defaultBranch: string;
   readonly #repositoryFullName: string;
+  readonly #token?: string;
   readonly #verifierWorkflow: string;
 
   constructor({
     defaultBranch = FIXTURE_REPOSITORY.defaultBranch,
     repositoryFullName = FIXTURE_REPOSITORY.fullName,
+    token,
     verifierWorkflow = FIXTURE_REPOSITORY.verifierWorkflow,
   }: {
     defaultBranch?: string;
     repositoryFullName?: string;
+    token?: string;
     verifierWorkflow?: string;
   } = {}) {
     this.#defaultBranch = defaultBranch;
     this.#repositoryFullName = repositoryFullName;
+    this.#token = token;
     this.#verifierWorkflow = verifierWorkflow;
   }
 
@@ -76,6 +83,8 @@ export class GitHubActionsVerifierAdapter implements VerifierAdapter {
   }): Promise<StartedVerification | null> {
     const response = await githubRequest(
       `/repos/${this.#repositoryFullName}/actions/workflows/${this.#verifierWorkflow}/runs?event=workflow_dispatch&per_page=100`,
+      {},
+      this.#token,
     );
     const payload = (await response.json()) as {
       workflow_runs?: Array<{
@@ -132,6 +141,7 @@ export class GitHubActionsVerifierAdapter implements VerifierAdapter {
         }),
         method: "POST",
       },
+      this.#token,
     );
 
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -159,6 +169,8 @@ export class GitHubActionsVerifierAdapter implements VerifierAdapter {
   ): Promise<RefreshedVerification> {
     const response = await githubRequest(
       `/repos/${this.#repositoryFullName}/actions/runs/${runId}`,
+      {},
+      this.#token,
     );
     const run = (await response.json()) as {
       conclusion: string | null;
