@@ -53,8 +53,7 @@ const runWorkerProcess = async ({
   const child = spawn(
     process.execPath,
     [
-      "--import",
-      "tsx",
+      "--experimental-strip-types",
       workerScriptPath,
       "--input",
       inputPath,
