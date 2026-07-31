@@ -48,18 +48,11 @@ const runWorkerProcess = async ({
 
   const workerScriptPath = path.join(
     process.cwd(),
-    "scripts/run-isolated-cursor-worker.ts",
+    "scripts/run-isolated-cursor-worker.bundle.mjs",
   );
   const child = spawn(
     process.execPath,
-    [
-      "--experimental-strip-types",
-      workerScriptPath,
-      "--input",
-      inputPath,
-      "--output",
-      outputPath,
-    ],
+    [workerScriptPath, "--input", inputPath, "--output", outputPath],
     {
       env: environment,
       shell: false,

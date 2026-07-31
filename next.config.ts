@@ -3,8 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/internal/task-executions/reconcile": [
-      "scripts/run-isolated-cursor-worker.ts",
-      "src/lib/workers/isolated/cursor-run.ts",
+      "scripts/run-isolated-cursor-worker.bundle.mjs",
       "node_modules/@cursor/sdk/**/*",
     ],
   },
