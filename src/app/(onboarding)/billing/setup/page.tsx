@@ -20,7 +20,7 @@ const BillingSetupPage = async () => {
   }
 
   if (await hasCompletedBillingSetup(user.id)) {
-    redirect("/dashboard");
+    redirect("/console");
   }
 
   const publishableKey = process.env.NEXT_PUBLIC_PINCH_PUBLISHABLE_KEY;

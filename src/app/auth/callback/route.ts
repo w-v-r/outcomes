@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const getSafeNextPath = (nextPath: string | null) => {
   if (!nextPath?.startsWith("/") || nextPath.startsWith("//")) {
-    return "/dashboard";
+    return "/console";
   }
 
   return nextPath;

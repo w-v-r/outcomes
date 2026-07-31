@@ -116,5 +116,5 @@ export const authenticate = async (
     };
   }
 
-  redirect("/dashboard");
+  redirect("/console");
 };

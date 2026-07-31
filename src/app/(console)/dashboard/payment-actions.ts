@@ -195,7 +195,8 @@ export const createSandboxDemoQuote = async (
     };
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/console/dashboard");
+  revalidatePath("/console/billing");
 
   return {
     message: "Sandbox quote created. Review and approve the exact amount.",
@@ -261,7 +262,8 @@ export const approveSandboxDemoQuote = async (
     };
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/console/dashboard");
+  revalidatePath("/console/billing");
 
   return {
     message: "Quote approved. The simulated worker can now complete the task.",
@@ -323,7 +325,8 @@ export const completeAndChargeSandboxTask = async (
   try {
     const payment = await chargeVerifiedTask(task.id);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/console/dashboard");
+    revalidatePath("/console/billing");
 
     return {
       message: payment.paymentId

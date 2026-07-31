@@ -12,13 +12,13 @@ export const GET = async (request: NextRequest) => {
 
   if (!user) {
     const signInUrl = new URL("/sign-in", request.url);
-    signInUrl.searchParams.set("next", "/dashboard");
+    signInUrl.searchParams.set("next", "/console");
     return NextResponse.redirect(signInUrl);
   }
 
   const config = getGitHubAppConfig();
   const state = createGitHubInstallationState({
-    returnTo: "/dashboard",
+    returnTo: "/console",
     secret: config.stateSecret,
     userId: user.id,
   });
