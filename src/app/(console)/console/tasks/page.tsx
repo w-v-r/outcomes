@@ -32,7 +32,7 @@ const TasksPage = async () => {
 
       <div className="px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
         <div className="overflow-x-auto border-y border-paper/10">
-          <table className="w-full min-w-[760px] border-collapse text-left">
+          <table className="w-full min-w-[840px] border-collapse text-left">
             <thead>
               <tr className="border-b border-paper/10 text-[11px] font-medium uppercase tracking-[0.07em] text-paper/40">
                 <th className="px-3 py-3 font-medium" scope="col">
@@ -43,6 +43,9 @@ const TasksPage = async () => {
                 </th>
                 <th className="px-3 py-3 font-medium" scope="col">
                   Status
+                </th>
+                <th className="px-3 py-3 font-medium" scope="col">
+                  Billing
                 </th>
                 <th className="px-3 py-3 font-medium" scope="col">
                   Created
@@ -57,7 +60,7 @@ const TasksPage = async () => {
                 <tr>
                   <td
                     className="px-3 py-12 text-center text-sm text-paper/45"
-                    colSpan={5}
+                    colSpan={6}
                   >
                     No priced tasks yet.
                   </td>
@@ -78,6 +81,13 @@ const TasksPage = async () => {
                     </td>
                     <td className="px-3 py-4">
                       <StatusBadge status={task.status} />
+                    </td>
+                    <td className="px-3 py-4">
+                      {task.settlementStatus ? (
+                        <StatusBadge status={task.settlementStatus} />
+                      ) : (
+                        <span className="text-xs text-paper/25">—</span>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-paper/45">
                       {formatConsoleDate(task.createdAt)}

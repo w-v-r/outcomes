@@ -5,7 +5,8 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { getAuthenticatedUser } from "@/lib/auth/get-authenticated-user";
-import { chargeVerifiedTask } from "@/lib/billing/charge-verified-task";
+import { accrueVerifiedTask } from "@/lib/billing/accrue-verified-task";
+import { chargeOutstandingBalance } from "@/lib/billing/charge-outstanding-balance";
 import { hasCompletedBillingSetup } from "@/lib/billing/get-billing-account";
 import { decideTaskEligibility } from "@/lib/pricing/eligibility";
 import { estimateTaskCost } from "@/lib/pricing/estimator";
@@ -271,7 +272,7 @@ export const approveSandboxDemoQuote = async (
   };
 };
 
-export const completeAndChargeSandboxTask = async (
+export const completeAndAccrueSandboxTask = async (
   _previousState: DemoActionState,
   formData: FormData,
 ): Promise<DemoActionState> => {
@@ -297,7 +298,7 @@ export const completeAndChargeSandboxTask = async (
     taskError ||
     !task ||
     !task.external_ref?.startsWith("dashboard-demo-") ||
-    !["approved", "verified", "charging", "completed"].includes(task.status)
+    !["approved", "verified", "completed"].includes(task.status)
   ) {
     return {
       message: "Approve the quote before simulating completion.",
@@ -323,19 +324,18 @@ export const completeAndChargeSandboxTask = async (
   }
 
   try {
-    const payment = await chargeVerifiedTask(task.id);
+    const accrual = await accrueVerifiedTask(task.id);
 
     revalidatePath("/console/dashboard");
     revalidatePath("/console/billing");
+    revalidatePath("/console/tasks");
 
     return {
-      message: payment.paymentId
-        ? `Pinch sandbox payment ${payment.paymentId} is ${payment.paymentStatus}.`
-        : `Pinch sandbox payment is ${payment.paymentStatus}.`,
-      status:
-        ["failed", "unknown"].includes(payment.paymentStatus)
-          ? "error"
-          : "success",
+      message: `${new Intl.NumberFormat("en-AU", {
+        currency: accrual.currency,
+        style: "currency",
+      }).format(accrual.amountCents / 100)} accrued. Pinch is not called until settlement.`,
+      status: "success",
     };
   } catch (error) {
     return {
@@ -343,6 +343,52 @@ export const completeAndChargeSandboxTask = async (
         error instanceof Error
           ? error.message
           : "The sandbox payment could not be submitted.",
+      status: "error",
+    };
+  }
+};
+
+export const settleSandboxBalance = async (
+  _previousState: DemoActionState,
+  _formData: FormData,
+): Promise<DemoActionState> => {
+  const user = await getAuthenticatedUser();
+
+  if (!user) {
+    return {
+      message: "Sign in before settling the sandbox balance.",
+      status: "error",
+    };
+  }
+
+  try {
+    const payment = await chargeOutstandingBalance(user.id);
+
+    revalidatePath("/console/dashboard");
+    revalidatePath("/console/billing");
+    revalidatePath("/console/tasks");
+
+    if (payment.paymentStatus === "below_threshold") {
+      return {
+        message: "The outstanding balance is below the $10 threshold.",
+        status: "success",
+      };
+    }
+
+    return {
+      message: payment.providerPaymentId
+        ? `Pinch sandbox payment ${payment.providerPaymentId} is ${payment.paymentStatus}.`
+        : `Batch payment ${payment.paymentId} is ${payment.paymentStatus}.`,
+      status: ["failed", "unknown"].includes(payment.paymentStatus)
+        ? "error"
+        : "success",
+    };
+  } catch (error) {
+    return {
+      message:
+        error instanceof Error
+          ? error.message
+          : "The sandbox balance could not be settled.",
       status: "error",
     };
   }

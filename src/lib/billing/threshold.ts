@@ -1,0 +1,1 @@
+export const CHARGE_THRESHOLD_CENTS = 1_000;

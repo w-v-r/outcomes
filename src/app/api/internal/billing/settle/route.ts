@@ -1,25 +1,18 @@
-import { randomUUID } from "node:crypto";
-
+import { settleOutstandingBalances } from "@/lib/billing/charge-outstanding-balance";
 import { isAuthorizedInternalRequest } from "@/lib/control-plane/internal-request";
-import { reconcileControlPlane } from "@/lib/control-plane/reconciliation";
-
-export { isAuthorizedInternalRequest } from "@/lib/control-plane/internal-request";
 
 export const runtime = "nodejs";
 export const maxDuration = 800;
 
 const parseBatchSize = (): number => {
-  const configured = Number(process.env.OUTCOMES_EXECUTION_BATCH_SIZE ?? "1");
+  const configured = Number(process.env.OUTCOMES_BILLING_BATCH_SIZE ?? "25");
 
   if (!Number.isSafeInteger(configured)) {
-    return 1;
+    return 25;
   }
 
-  return Math.max(1, Math.min(configured, 3));
+  return Math.max(1, Math.min(configured, 100));
 };
-
-export const getReconciliationHttpStatus = (partial: boolean): 200 | 207 =>
-  partial ? 207 : 200;
 
 export const GET = async (request: Request) => {
   if (!isAuthorizedInternalRequest(request)) {
@@ -27,7 +20,7 @@ export const GET = async (request: Request) => {
       {
         error: {
           code: "unauthorized",
-          message: "The internal execution trigger is unauthorized.",
+          message: "The internal billing trigger is unauthorized.",
         },
       },
       {
@@ -38,21 +31,20 @@ export const GET = async (request: Request) => {
   }
 
   try {
-    const result = await reconcileControlPlane({
+    const result = await settleOutstandingBalances({
       batchSize: parseBatchSize(),
-      claimedBy: `cron:${randomUUID()}`,
     });
 
     return Response.json(result, {
       headers: { "Cache-Control": "no-store" },
-      status: getReconciliationHttpStatus(result.partial),
+      status: result.failed > 0 ? 207 : 200,
     });
   } catch {
     return Response.json(
       {
         error: {
-          code: "reconciliation_failed",
-          message: "Task execution reconciliation failed.",
+          code: "settlement_failed",
+          message: "Accrued billing settlement failed.",
         },
       },
       {

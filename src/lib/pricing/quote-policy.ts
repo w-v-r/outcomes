@@ -13,7 +13,7 @@ export const HACKATHON_PRICING_POLICY = {
 } as const;
 
 export const FIXED_QUOTE_TERMS =
-  "Fixed sandbox price. Charge only after the trusted verifier confirms the allowlisted outcome.";
+  "Fixed sandbox price. Accrue only after trusted verification; charge the stored payment method in a batch when the outstanding verified balance reaches AUD $10.";
 
 const canonicalize = (value: unknown): unknown => {
   if (Array.isArray(value)) {

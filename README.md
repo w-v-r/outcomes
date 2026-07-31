@@ -1,7 +1,8 @@
 # Outcomes
 
 Outcomes gives coding agents a fixed-price task contract, runs the work, verifies
-the result independently, and charges only after verified success.
+the result independently, accrues only verified work, and batch-charges the
+customer when their outstanding balance reaches AUD $10.
 
 ## Install the hosted MCP
 
@@ -153,7 +154,8 @@ The expected lifecycle is:
 ```text
 snapshot quote → explicit approval → durable execution claim
   → exact-SHA isolated Cursor worker → deterministic draft PR
-  → trusted GitHub verification → Pinch sandbox charge → completed
+  → trusted GitHub verification → billing accrual → completed
+  → four-times-daily threshold settlement → Pinch sandbox charge
 ```
 
 Quote creation does not start work or submit a payment. The agent must present
@@ -169,7 +171,8 @@ the quote and receive explicit approval before calling
 - Deterministic GitHub App branch, commit, and draft-PR publication
 - Repository-scoped GitHub Actions verification when the repository has the
   trusted verifier workflow
-- Exactly-once Pinch sandbox charging after verified success
+- Exactly-once billing accrual after verified success and atomic Pinch batch
+  settlement at an AUD $10 outstanding balance
 - Scheduled task reconciliation independent of customer status polling
 
 The legacy calculator quote remains AUD 12.50 in sandbox mode. Immutable
@@ -224,12 +227,14 @@ Evidence and policy failures fail immediately.
 Vercel invokes the authenticated internal reconciler every minute; `GET
 /api/v1/tasks/:taskId` is now read-only. Set `CRON_SECRET` and keep
 `OUTCOMES_EXECUTION_BATCH_SIZE=1`; larger values only bound downstream legacy,
-verification, and payment reconciliation because isolated execution is fixed
-to one claim. The one-minute schedule requires a Vercel plan that supports
-sub-daily cron jobs. For local reconciliation:
+verification, and accrual because isolated execution is fixed to one claim.
+A separate authenticated billing cron runs at 00:00, 06:00, 12:00, and 18:00
+UTC and claims customer balances at or above AUD $10. Both schedules require a
+Vercel plan that supports sub-daily cron jobs. For local reconciliation:
 
 ```bash
 npm run tasks:reconcile -- --batch 1
+npm run billing:settle -- --batch 25
 ```
 
 REST and CLI status share an explicit customer-safe execution contract. Human
@@ -242,7 +247,7 @@ repository bindings. The snapshot URL/SHA legacy quote shape remains compatible
 and advances through the prior Cursor Cloud lifecycle in the background; it is
 never claimed by the isolated runner. Verification is scoped to the task's
 repository and base branch; a repository without the trusted
-`outcomes-verify.yml` workflow cannot verify or charge. Customers install that
+`outcomes-verify.yml` workflow cannot verify or accrue. Customers install that
 small repository-owned policy once; it accepts only Outcomes' pinned baseline,
 result branch, and task ID, while the repository decides which independent
 tests and path constraints must pass. Verifier dispatch
@@ -250,17 +255,21 @@ recovery discovers the task-keyed workflow run and fails closed rather than
 redispatching when identity cannot be established. Pinch
 `reserved`/`submitting`/`unknown` payments reconcile and, only after a
 definitive no-replay result, resubmit with the same provider nonce. The payment
-reservation snapshots payer, source, amount, and currency; recovery never
+batch atomically allocates exact task accruals and snapshots payer, source,
+amount, and currency; recovery never
 switches to a newer default source. Conditional transitions preserve an
-already-approved/pending payment and completed task over a late ambiguous
-response. Payment creation/mutation is service-only, and the database protects
-the reserved provider payload from later edits. Only documented
+already-approved/pending payment over a late ambiguous response. A task is paid
+only when its active allocation belongs to that successful payment; accruals
+created after the claim remain outstanding for a later settlement. Payment and
+allocation creation/mutation is service-only, and the database protects the
+reserved provider payload from later edits. Only documented
 request/rejection responses (`400`/`422`) are terminal; authentication,
 not-found, conflict, throttling, transport, and `5xx` responses remain
 recoverable.
 
-Safe rollout order is: deploy this application version first, then promptly
-apply `20260730163203_task_execution_claims.sql`, then enable cron. The migration
+Safe rollout order for accrual billing is: apply
+`20260731035108_billing_accrual_threshold.sql`, deploy this application
+version, then confirm both crons. The earlier execution migration
 backfills approved binding-backed tasks without run evidence to
 `isolated_local`. During the narrow rolling window, binding-backed cloud tasks
 that already reached `starting` or `executing` continue through the prior cloud
@@ -376,8 +385,10 @@ the production API and a controlled local worker as documented above.
   resource; changing the request produces a conflict.
 - A worker reporting success is not enough to charge. The trusted verifier must
   pass first.
-- Pinch payment nonces and database uniqueness constraints prevent duplicate
-  charges during retries. Worker or PR success alone never triggers payment.
+- Verification creates one immutable task accrual; it does not call Pinch.
+- Four-times-daily settlement atomically claims exact accrual rows only when
+  the outstanding balance reaches AUD $10. Batch nonces and active-allocation
+  uniqueness prevent duplicate charges and paid/unpaid drift.
 - The deployed integration is sandbox-only. It does not move real money.
 
 Revoke a key from the dashboard immediately if it is exposed.

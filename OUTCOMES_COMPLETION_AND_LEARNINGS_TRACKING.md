@@ -248,6 +248,9 @@ Status: **complete live sandbox vertical slice verified**.
   `outcomes-verify.yml` workflow and never accepts customer commands.
 - Extracted `chargeVerifiedTask(taskId)` and made both dashboard and control
   plane use the same deterministic Pinch nonce and one-payment-per-task guard.
+  This historical per-task path is superseded by `$10` accrual billing:
+  `accrueVerifiedTask(taskId)` records delivery while a separate scheduled
+  settlement atomically allocates multiple tasks to one Pinch batch.
 - Added canonical REST operations:
   - `POST /api/v1/quotes`
   - `POST /api/v1/quotes/:quoteId/accept`

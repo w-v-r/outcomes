@@ -403,7 +403,7 @@ export const createSnapshotQuoteService = (
       evaluation.pricing.customer.policyVersion;
     const terms = eligibility.eligible
       ? [
-          "Fixed sandbox price for the immutable repository snapshot. Charge only after the trusted allowlisted verifier confirms the outcome.",
+          "Fixed sandbox price for the immutable repository snapshot. Accrue only after trusted allowlisted verification; charge the stored payment method in a batch when the outstanding verified balance reaches AUD $10.",
           ...(eligibility.conditions ?? []),
         ].join(" ")
       : eligibility.reason;

@@ -45,7 +45,6 @@ const createReconciliationDependencies = (): ReconciliationDependencies => ({
           "worker_succeeded",
           "verifying",
           "verified",
-          "charging",
         ])
         .order("updated_at", { ascending: true })
         .limit(batchSize),
