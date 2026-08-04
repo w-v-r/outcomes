@@ -105,7 +105,45 @@ describe("pricing kernel", () => {
     });
   });
 
-  test("estimates the fixture and applies the AUD 12.50 floor", async () => {
+  test("distinguishes documentation work from document-search features", () => {
+    const sharedTask = {
+      acceptanceCriteria: ["The requested outcome is demonstrated."],
+      prohibitedChanges: ["Do not add unrelated dependencies."],
+    };
+    const documentation = analyzeTask(
+      {
+        ...sharedTask,
+        description:
+          "Update the root README with archive migration notes.",
+        id: "documentation-task",
+      },
+      FIXTURE_MANIFEST,
+    );
+    const documentSearch = analyzeTask(
+      {
+        ...sharedTask,
+        description:
+          "Add a runnable document and metadata search example.",
+        id: "document-search-task",
+      },
+      FIXTURE_MANIFEST,
+    );
+    const adapterFeature = analyzeTask(
+      {
+        ...sharedTask,
+        description:
+          "Define an IndexAdapter protocol and in-memory adapter.",
+        id: "adapter-feature-task",
+      },
+      FIXTURE_MANIFEST,
+    );
+
+    expect(documentation.taskFamily).toBe("documentation");
+    expect(documentSearch.taskFamily).toBe("feature");
+    expect(adapterFeature.taskFamily).toBe("feature");
+  });
+
+  test("prices the fixture from calibrated execution cost without a commercial floor", async () => {
     const task = {
       id: "test-task",
       ...ZERO_DIVISION_TASK_CONTRACT,
@@ -140,7 +178,10 @@ describe("pricing kernel", () => {
     expect(estimate.executionAllowance.softTokenLimit).toBeGreaterThan(
       estimate.predicted.inputTokens.central,
     );
-    expect(quote.amountCents).toBe(1_250);
+    expect(quote.amountCents).toBeGreaterThan(
+      Math.ceil(estimate.predicted.costUsd.high * 1.55 * 100),
+    );
+    expect(quote.amountCents).toBeLessThan(1_250);
     expect(quote.contractHash).toMatch(/^[0-9a-f]{64}$/u);
   });
 

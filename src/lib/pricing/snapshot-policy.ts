@@ -10,12 +10,13 @@ import {
 
 export const SNAPSHOT_PRICING_POLICY = {
   id: "snapshot-variable-pricing",
-  marginRatio: 0.35,
-  paymentAllowanceCents: 55,
+  marginRatio: 0.1,
+  paymentFeeRatio: 0.02,
   quoteLifetimeMinutes: 30,
-  retryBaseRatio: 0.65,
+  minimumRiskRatio: 0.1,
+  maximumRiskRatio: 0.75,
   usdToAudRate: 1.55,
-  version: "2.0.0",
+  version: "3.0.0",
 } as const;
 
 export const ACCEPT_WITH_CONDITIONS_NOTICE =
@@ -61,32 +62,22 @@ export const deriveSnapshotPricing = ({
   underwriting: SnapshotUnderwriting;
 } => {
   const predictedWorkerHighUsd = estimate.predicted.costUsd.high;
-  const workerExecutionBudgetUsd = Math.max(
-    predictedWorkerHighUsd,
-    estimate.executionAllowance.softCostLimitUsd,
+  const workerExecutionBudgetUsd = predictedWorkerHighUsd;
+  const analysisAllowanceUsd = 0;
+  const verificationAllowanceUsd = 0;
+  const failureProbability = 1 - estimate.predicted.successProbability;
+  const retryRiskMultiplier = Math.min(
+    SNAPSHOT_PRICING_POLICY.maximumRiskRatio,
+    Math.max(
+      SNAPSHOT_PRICING_POLICY.minimumRiskRatio,
+      failureProbability / estimate.predicted.successProbability,
+    ),
   );
-  const analysisAllowanceUsd = Math.min(
-    0.5,
-    0.08 +
-      manifest.totals.files * 0.001 +
-      manifest.packages.length * 0.015 +
-      (manifest.baselineSignals.isMonorepo ? 0.12 : 0),
-  );
-  const verificationAllowanceUsd =
-    (manifest.baselineSignals.hasTests ? 0.12 : 0.25) +
-    Math.min(0.2, manifest.testFiles.length * 0.005);
-  const retryRiskMultiplier =
-    SNAPSHOT_PRICING_POLICY.retryBaseRatio +
-    (1 - estimate.predicted.successProbability) * 0.75;
   const retryRiskAllowanceUsd =
-    (predictedWorkerHighUsd +
-      analysisAllowanceUsd +
-      verificationAllowanceUsd) *
+    workerExecutionBudgetUsd *
     retryRiskMultiplier;
   const internalBudgetUsd =
     workerExecutionBudgetUsd +
-    analysisAllowanceUsd +
-    verificationAllowanceUsd +
     retryRiskAllowanceUsd;
   const costCoverageCents = Math.ceil(
     internalBudgetUsd * SNAPSHOT_PRICING_POLICY.usdToAudRate * 100,
@@ -94,38 +85,40 @@ export const deriveSnapshotPricing = ({
   const marginAllowanceCents = Math.ceil(
     costCoverageCents * SNAPSHOT_PRICING_POLICY.marginRatio,
   );
-  const commercialMinimumCents =
-    650 +
-    Math.min(500, analysis.likelyRelevantFiles.length * 25) +
-    (manifest.baselineSignals.isMonorepo ? 250 : 0) +
-    (manifest.oversizedFiles.length > 0 ? 150 : 0);
+  const commercialMinimumCents = 0;
+  const prePaymentFeeCents =
+    costCoverageCents + marginAllowanceCents;
   const fixedPriceCents = Math.max(
-    commercialMinimumCents,
-    costCoverageCents +
-      SNAPSHOT_PRICING_POLICY.paymentAllowanceCents +
-      marginAllowanceCents,
+    1,
+    Math.ceil(
+      prePaymentFeeCents /
+        (1 - SNAPSHOT_PRICING_POLICY.paymentFeeRatio),
+    ),
   );
+  const paymentAllowanceCents =
+    fixedPriceCents - prePaymentFeeCents;
+  const lowExecutionBudgetUsd = estimate.predicted.costUsd.low;
+  const lowRiskAllowanceUsd =
+    lowExecutionBudgetUsd * retryRiskMultiplier;
   const lowCostCoverageCents = Math.ceil(
-    (estimate.predicted.costUsd.low +
-      analysisAllowanceUsd * 0.5 +
-      verificationAllowanceUsd * 0.75) *
-      SNAPSHOT_PRICING_POLICY.usdToAudRate *
-      100,
+    (lowExecutionBudgetUsd + lowRiskAllowanceUsd) *
+      SNAPSHOT_PRICING_POLICY.usdToAudRate * 100,
   );
   const lowCents = Math.min(
     fixedPriceCents,
     Math.max(
-      450,
+      1,
       Math.ceil(
-        (lowCostCoverageCents +
-          SNAPSHOT_PRICING_POLICY.paymentAllowanceCents) *
-          1.2,
+        (lowCostCoverageCents *
+          (1 + SNAPSHOT_PRICING_POLICY.marginRatio)) /
+          (1 - SNAPSHOT_PRICING_POLICY.paymentFeeRatio),
       ),
     ),
   );
   const factors = [
     `Task family: ${analysis.taskFamily}.`,
-    `${analysis.likelyRelevantFiles.length} repository files appear relevant.`,
+    `${analysis.likelyRelevantFiles.length} repository files appear relevant; ${estimate.predicted.filesTouched.low}-${estimate.predicted.filesTouched.high} are expected to change.`,
+    `Execution is estimated at ${estimate.predicted.llmCalls.low}-${estimate.predicted.llmCalls.high} LLM calls.`,
     manifest.baselineSignals.hasTests
       ? "The snapshot contains test evidence."
       : "The snapshot has no detected test suite, increasing verification uncertainty.",
@@ -133,6 +126,9 @@ export const deriveSnapshotPricing = ({
       ? "The repository is a monorepo, increasing coordination risk."
       : "The repository is not detected as a monorepo.",
     `The predicted success confidence is ${estimate.confidence}.`,
+    "The fixed quote uses the high calibrated worker-cost estimate.",
+    `Failure risk adds ${(retryRiskMultiplier * 100).toFixed(1)}%.`,
+    "The quote includes a 10% target margin and a 2% payment fee.",
     ...(estimate.decision === "accept_with_conditions"
       ? [`Execution condition: ${ACCEPT_WITH_CONDITIONS_NOTICE}`]
       : []),
@@ -162,7 +158,7 @@ export const deriveSnapshotPricing = ({
     fixedPriceCents,
     internalBudgetUsd: roundUsd(internalBudgetUsd),
     marginAllowanceCents,
-    paymentAllowanceCents: SNAPSHOT_PRICING_POLICY.paymentAllowanceCents,
+    paymentAllowanceCents,
     predictedWorkerHighUsd: roundUsd(predictedWorkerHighUsd),
     retryRiskAllowanceUsd: roundUsd(retryRiskAllowanceUsd),
     retryRiskMultiplier: Number(retryRiskMultiplier.toFixed(6)),
