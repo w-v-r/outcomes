@@ -9,12 +9,50 @@ export type IsolatedCursorRunInput = {
 };
 
 export type IsolatedCursorRunResult = {
+  actualCostUsd: number | null;
   agentId: string;
   error: string | null;
   output: string | null;
   runId: string;
   status: "cancelled" | "error" | "finished";
   usage: TokenUsage | null;
+};
+
+const fetchChargedCostUsd = async ({
+  agentId,
+  apiKey,
+  runId,
+}: {
+  agentId: string;
+  apiKey: string;
+  runId: string;
+}): Promise<number | null> => {
+  try {
+    const url = new URL(
+      `https://api.cursor.com/v1/agents/${encodeURIComponent(agentId)}/usage`,
+    );
+    url.searchParams.set("runId", runId);
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`,
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      runs?: Array<{ cost?: { chargedCents?: number } }>;
+    };
+    const chargedCents = payload.runs?.[0]?.cost?.chargedCents;
+
+    return typeof chargedCents === "number"
+      ? chargedCents / 100
+      : null;
+  } catch {
+    return null;
+  }
 };
 
 const buildIsolatedPrompt = (prompt: string): string =>
@@ -66,8 +104,14 @@ export const executeIsolatedCursorRun = async ({
       mode: "agent",
     });
     const result = await run.wait();
+    const actualCostUsd = await fetchChargedCostUsd({
+      agentId: agent.agentId,
+      apiKey,
+      runId: result.id,
+    });
 
     return {
+      actualCostUsd,
       agentId: agent.agentId,
       error: result.error?.message ?? null,
       output: result.result ?? null,

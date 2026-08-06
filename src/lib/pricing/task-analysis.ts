@@ -41,10 +41,13 @@ const FAMILY_PATTERNS: Array<[TaskAnalysis["taskFamily"], RegExp]> = [
   ["bug-fix", /\b(bug|broken|error|fail(?:ing|ed)?|fix|regression)\b/iu],
   ["test", /\b(coverage|spec|test)\b/iu],
   ["refactor", /\b(cleanup|refactor|reorganize|simplify)\b/iu],
-  ["migration", /\b(migrate|migration|upgrade)\b/iu],
-  ["documentation", /\b(document|documentation|readme)\b/iu],
   ["investigation", /\b(diagnose|investigate|profile|root cause)\b/iu],
-  ["feature", /\b(add|build|create|feature|implement|support)\b/iu],
+  [
+    "documentation",
+    /\b(readme|documentation|docs-only)\b|\b(document|write|update|create)\b.{0,40}\b(docs?|documentation|readme)\b/iu,
+  ],
+  ["migration", /\b(migrate|migration|upgrade)\b/iu],
+  ["feature", /\b(add|build|create|define|feature|implement|support)\b/iu],
 ];
 
 const OPEN_ENDED_PATTERNS = [

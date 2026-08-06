@@ -5,11 +5,14 @@ import { createHash } from "node:crypto";
 import { type TaskAnalysis, type TaskContract, type TaskEstimate } from "./domain";
 
 export const HACKATHON_PRICING_POLICY = {
-  audMinimumCents: 1_250,
+  audMinimumCents: 1,
+  marginRatio: 0.1,
+  maximumRiskRatio: 0.75,
+  minimumRiskRatio: 0.1,
+  paymentFeeRatio: 0.02,
   quoteLifetimeMinutes: 30,
-  riskMultiplier: 3,
   usdToAudRate: 1.55,
-  version: "hackathon-fixture-v1",
+  version: "charged-cost-v2",
 } as const;
 
 export const FIXED_QUOTE_TERMS =
@@ -69,15 +72,28 @@ export const deriveQuote = ({
   repositoryUrl: string;
   task: TaskContract;
 }) => {
-  const costBasedAmountCents = Math.ceil(
-    estimate.predicted.costUsd.high *
+  const failureProbability = 1 - estimate.predicted.successProbability;
+  const riskRatio = Math.min(
+    HACKATHON_PRICING_POLICY.maximumRiskRatio,
+    Math.max(
+      HACKATHON_PRICING_POLICY.minimumRiskRatio,
+      failureProbability / estimate.predicted.successProbability,
+    ),
+  );
+  const executionAndRiskUsd =
+    estimate.predicted.costUsd.high * (1 + riskRatio);
+  const subtotalCents = Math.ceil(
+    executionAndRiskUsd *
       HACKATHON_PRICING_POLICY.usdToAudRate *
-      HACKATHON_PRICING_POLICY.riskMultiplier *
+      (1 + HACKATHON_PRICING_POLICY.marginRatio) *
       100,
   );
   const amountCents = Math.max(
-    HACKATHON_PRICING_POLICY.audMinimumCents,
-    costBasedAmountCents,
+    1,
+    Math.ceil(
+      subtotalCents /
+        (1 - HACKATHON_PRICING_POLICY.paymentFeeRatio),
+    ),
   );
   const expiresAt = new Date(
     now.getTime() +
@@ -101,5 +117,6 @@ export const deriveQuote = ({
     estimate,
     internalCostBudgetUsd: estimate.executionAllowance.softCostLimitUsd,
     predictedCostUsd: estimate.predicted.costUsd.high,
+    riskMultiplier: riskRatio,
   };
 };

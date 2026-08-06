@@ -124,7 +124,9 @@ export const taskEstimateSchema = z.object({
   predicted: z.object({
     cacheReadTokens: estimateRangeSchema,
     costUsd: estimateRangeSchema,
+    filesTouched: estimateRangeSchema,
     inputTokens: estimateRangeSchema,
+    llmCalls: estimateRangeSchema,
     outputTokens: estimateRangeSchema,
     runtimeSeconds: estimateRangeSchema,
     successProbability: z.number().min(0).max(1),

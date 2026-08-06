@@ -307,7 +307,7 @@ const createLegacyQuote = async (
       ),
       quote_id: quoteRow.id,
       rate_card_version: `${HACKATHON_MODEL_RATE.id}:${HACKATHON_MODEL_RATE.effectiveDate}`,
-      risk_multiplier: HACKATHON_PRICING_POLICY.riskMultiplier,
+      risk_multiplier: quote.riskMultiplier,
       usd_to_aud_rate: HACKATHON_PRICING_POLICY.usdToAudRate,
       user_id: principal.userId,
     });

@@ -128,6 +128,7 @@ export type TaskExecutionRecovery = {
 };
 
 export type PersistedWorkerRun = {
+  actualCostUsd: number | null;
   agentId: string;
   modelId: string;
   output: string | null;
@@ -363,6 +364,15 @@ const parseRecovery = (
     branch: evidence.branch,
     changes: parseValidatedChanges(evidence.changes),
     run: {
+      actualCostUsd:
+        typeof row.usage === "object" &&
+        row.usage &&
+        typeof (row.usage as Record<string, unknown>).chargedCostUsd ===
+          "number"
+          ? Number(
+              (row.usage as Record<string, unknown>).chargedCostUsd,
+            )
+          : null,
       agentId: row.agent_id,
       modelId: row.worker_model,
       output:
@@ -901,11 +911,19 @@ const toPersistedRun = (
   run: IsolatedCursorRunResult,
   modelId: string,
 ): PersistedWorkerRun => ({
+  actualCostUsd: run.actualCostUsd,
   agentId: run.agentId,
   modelId,
   output: run.output,
   runId: run.runId,
-  usage: run.usage as Record<string, unknown> | null,
+  usage: run.usage || run.actualCostUsd !== null
+    ? {
+        ...(run.usage ?? {}),
+        ...(run.actualCostUsd !== null
+          ? { chargedCostUsd: run.actualCostUsd }
+          : {}),
+      }
+    : null,
 });
 
 const createTaskExecutor = (): TaskExecutor => ({
@@ -931,6 +949,7 @@ const createTaskExecutor = (): TaskExecutor => ({
         ? {
             changes: input.recovery.changes,
             run: {
+              actualCostUsd: input.recovery.run.actualCostUsd,
               agentId: input.recovery.run.agentId,
               error: null,
               output: input.recovery.run.output,

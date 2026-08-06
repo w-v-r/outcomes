@@ -304,8 +304,23 @@ describe("snapshot-backed assessment and pricing", () => {
     );
     expect(
       large.pricing.underwriting.workerExecutionBudgetUsd,
-    ).toBeGreaterThanOrEqual(
-      large.estimate.executionAllowance.softCostLimitUsd,
+    ).toBeCloseTo(
+      large.estimate.predicted.costUsd.high,
+      6,
+    );
+    expect(
+      large.pricing.underwriting.commercialMinimumCents,
+    ).toBe(0);
+    expect(
+      large.pricing.underwriting.paymentAllowanceCents,
+    ).toBe(
+      large.pricing.underwriting.fixedPriceCents -
+        Math.ceil(
+          large.pricing.underwriting.internalBudgetUsd *
+            1.55 *
+            100,
+        ) -
+        large.pricing.underwriting.marginAllowanceCents,
     );
   });
 

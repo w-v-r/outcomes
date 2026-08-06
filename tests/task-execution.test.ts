@@ -74,6 +74,7 @@ const output: TaskExecutionOutput = {
     prUrl: "https://github.com/w-v-r/agent-cost-benchmark-fixture/pull/7",
   },
   run: {
+    actualCostUsd: 0.134963,
     agentId: "agent-1",
     modelId: "composer-2.5",
     output: "Completed",
